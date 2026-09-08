@@ -78,13 +78,43 @@ app.get("/.well-known/assetlinks.json", (_req, res) => {
 // Trust the first reverse-proxy hop (Replit and most real deployments
 // terminate TLS upstream) so req.secure reflects X-Forwarded-Proto instead
 // of the plain-HTTP hop between the proxy and this process.
-app.set("trust proxy", 1);
+// "true" (not a fixed hop count) so req.secure reflects the original
+// viewer protocol even behind a CDN-to-origin hop that's plain HTTP
+// (CloudFront -> EB, since EB's default domain has no HTTPS listener) --
+// CloudFront's own X-Forwarded-Proto is the leftmost, authoritative value.
+app.set("trust proxy", true);
+
+// CloudFront (fronting EB, since EB's own domain has no HTTPS listener) does
+// NOT add X-Forwarded-Proto to origin requests the way most reverse proxies
+// do -- confirmed by direct diagnostic logging, not assumed. Without it,
+// req.secure is false even though the viewer genuinely connected over HTTPS
+// (CloudFront enforces viewer-protocol-policy: https-only at the edge), which
+// breaks two things that both depend on req.secure: this file's own redirect
+// logic below, AND -- the one that actually broke login -- express-session's
+// runtime refusal to send a Secure-flagged cookie over what it thinks is an
+// insecure connection. Must run before the session middleware, which is why
+// it's registered this early. X-Amz-Cf-Id's presence is what CloudFront
+// reliably does add, so it's the signal used to know this is safe to trust.
+app.use((req, _res, next) => {
+  if (typeof req.headers["x-amz-cf-id"] === "string" && !req.headers["x-forwarded-proto"]) {
+    req.headers["x-forwarded-proto"] = "https";
+  }
+  next();
+});
 
 // Data protection — encrypt in transit: force HTTPS in production and tell
 // browsers to remember that (HSTS), plus baseline response-header hardening.
 // No-op locally (NODE_ENV !== "production"), since local dev has no TLS.
 app.use((req, res, next) => {
-  if (process.env["NODE_ENV"] === "production" && !req.secure) {
+  // X-Amz-Cf-Id is set by CloudFront on every request it forwards --
+  // presence of this header means CloudFront already terminated TLS and
+  // enforced viewer-protocol-policy: https-only at the edge, making this
+  // app's own redirect both redundant AND broken in that specific topology
+  // (req.headers.host here is the EB origin's internal hostname, which has
+  // no HTTPS listener of its own -- redirecting a browser to
+  // "https://<eb-hostname>" would just fail to load).
+  const behindCloudFront = typeof req.headers["x-amz-cf-id"] === "string";
+  if (process.env["NODE_ENV"] === "production" && !req.secure && !behindCloudFront) {
     res.redirect(308, `https://${req.headers.host}${req.originalUrl}`);
     return;
   }
@@ -180,7 +210,14 @@ app.use(
     cookie: {
       httpOnly: true,
       secure: process.env["NODE_ENV"] === "production",
-      sameSite: "lax",
+      // "lax" works for local dev (frontend and API share an origin via the
+      // Vite proxy, or at worst share a scheme+port pattern). A split
+      // deployment (frontend on Vercel, API on Render — different domains
+      // entirely) is genuinely cross-site, and browsers won't attach a
+      // "lax" cookie to a cross-site fetch. "none" is required there, which
+      // in turn requires Secure (already true in production) — browsers
+      // reject SameSite=None without it.
+      sameSite: process.env["NODE_ENV"] === "production" ? "none" : "lax",
       maxAge: IDLE_TIMEOUT_MS,
     },
   }),
@@ -202,5 +239,27 @@ app.use((req, res, next) => {
 });
 
 app.use("/api", router);
+
+// Last-resort safety net — never let an unhandled exception (a malformed
+// input that slips past a route's own validation and throws deeper in the
+// stack, e.g. a raw driver-level error) reach the client as Express's
+// default HTML error page, which includes the full stack trace: real file
+// paths, library internals, and in this app's case the exact SQL query and
+// its parameter value. That's a real information-disclosure risk found via
+// live testing (a numeric :id path param wide enough to pass validation but
+// too large for a Postgres integer column reached the database uncaught).
+// Deliberately NOT conditioned on NODE_ENV — relying solely on that being
+// set correctly in every deployment is exactly the kind of single point of
+// failure this exists to not depend on. Must be registered last, and must
+// keep all four handler parameters (err, req, res, next) — Express only
+// recognises a middleware as an error handler by that arity.
+app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction): void => {
+  if (res.headersSent) {
+    next(err);
+    return;
+  }
+  logger.error({ err, path: req.path, method: req.method }, "Unhandled error");
+  res.status(500).json({ error: "Internal server error" });
+});
 
 export default app;

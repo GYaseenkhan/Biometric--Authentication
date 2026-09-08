@@ -13,16 +13,11 @@
  * dependency — all four formats below are simple enough to parse at the
  * segment/chunk level without a full image decode.
  *
- * Video is explicitly NOT covered here, even though MP4/MOV containers can
- * carry GPS metadata (in their own moov/udta atom structure). That's a
- * different, harder container format — a hand-rolled atom walker risks
- * silently corrupting video files in a way a malformed JPEG/PNG/GIF/WebP
- * segment walker doesn't (this code fails open to the original bytes on
- * anything unexpected, which is a much safer failure mode for a still image
- * than for video, where subtle corruption may not be immediately visible).
- * Doing this properly needs a real MP4 parsing library, not a demo-scope
- * hand-rolled one — tracked as an accepted, documented limitation rather
- * than a silent gap.
+ * Video is not covered here — MP4/MOV containers carry GPS metadata in a
+ * different, differently-structured way (a moov/udta atom tree, not a flat
+ * segment/chunk sequence), and specifically need a box-order safety check
+ * this file's format-specific parsers don't. See lib/videoSafety.ts for
+ * that implementation and the full reasoning for why it's a separate file.
  */
 
 const JPEG_SOI = 0xd8;
