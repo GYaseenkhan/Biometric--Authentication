@@ -12,12 +12,15 @@ import {
 import { logEvent } from "../lib/auditLog";
 import { encryptFile, decryptFile } from "../lib/fileEncryption";
 import { requireMfaEnrolled } from "../middlewares/requireMfaEnrolled";
+import { requireParentConsent } from "../middlewares/requireParentConsent";
 import { requestRateLimit } from "../middlewares/requestRateLimit";
 import { stripImageMetadata, detectImageFormat } from "../lib/imageSafety";
+import { stripVideoMetadata } from "../lib/videoSafety";
 import { scanBuffer } from "../lib/malwareScan";
+import { scanWithClamdIfConfigured } from "../lib/clamdClient";
 
 const router: IRouter = Router();
-router.use(requireMfaEnrolled);
+router.use(requireParentConsent, requireMfaEnrolled);
 
 // Every upload costs real server work (malware scan + AES encryption) even
 // when rejected — 20 per 5 minutes per account is generous for legitimate
@@ -113,6 +116,25 @@ router.post("/uploads", uploadRateLimit, async (req, res): Promise<void> => {
     return;
   }
 
+  // Second, optional layer — a real AV engine via clamd's wire protocol,
+  // active only when CLAMD_HOST is configured. No-ops (available: false)
+  // when it isn't, or if clamd is unreachable — an infrastructure outage
+  // degrades to signature-only scanning rather than blocking every upload.
+  // See lib/clamdClient.ts for why this couldn't be verified against a real
+  // ClamAV instance in this environment.
+  const clamdScan = await scanWithClamdIfConfigured(plaintext);
+  if (clamdScan.available && !clamdScan.clean) {
+    await logEvent({
+      eventType: "UPLOAD_SCAN_REJECTED",
+      details: `Upload rejected by clamd: ${fileName} — ${clamdScan.reason}`,
+      userId,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers["user-agent"],
+    });
+    res.status(400).json({ error: `File rejected: ${clamdScan.reason}` });
+    return;
+  }
+
   if (fileType === "image") {
     // Client-declared Content-Type is hostile input — a browser derives
     // file.type from the file EXTENSION for a locally-picked file, not the
@@ -128,6 +150,15 @@ router.post("/uploads", uploadRateLimit, async (req, res): Promise<void> => {
     // Strip EXIF/GPS location and text metadata before it's ever encrypted
     // and stored (brief: "strip photo location data").
     plaintext = stripImageMetadata(plaintext, detectedFormat);
+  } else if (fileType === "video") {
+    // MP4/MOV GPS-atom stripping — see lib/videoSafety.ts for the full
+    // reasoning, including the box-order safety check that keeps this from
+    // being the "hand-rolled atom walker risks silent corruption" case this
+    // was previously, correctly, deferred over. Never rejects the upload:
+    // fails open to the original bytes on anything it isn't confident is
+    // safe (e.g. streaming-optimised layout, fragmented MP4, WebM), same as
+    // every image parser above.
+    plaintext = stripVideoMetadata(plaintext);
   }
 
   const encrypted = encryptFile(plaintext);
@@ -223,7 +254,7 @@ router.delete("/uploads/:id", async (req, res): Promise<void> => {
   }
 
   await db.delete(uploadsTable).where(eq(uploadsTable.id, params.data.id));
-  await logEvent({ eventType: "UPLOAD_DELETED", details: `Upload deleted: ${upload.fileName}`, userId });
+  await logEvent({ eventType: "UPLOAD_DELETED", details: `Upload deleted: ${upload.fileName} (${upload.fileType}, ${upload.mimeType}, ${upload.sizeBytes} bytes)`, userId });
   res.sendStatus(204);
 });
 
