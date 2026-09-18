@@ -63,3 +63,37 @@ For the mobile app, see [`artifacts/mobile/README.md`](artifacts/mobile/README.m
 ## Progress tracking
 
 Work is tracked week-by-week against the brief as [GitHub Issues](../../issues), each with a checklist mapping brief requirements to the actual files that satisfy them. [`PROGRESS.md`](PROGRESS.md) mirrors the same status locally, in-repo.
+
+## Dataset Selection
+
+For AI/ML experimentation, facial recognition datasets such as
+Labeled Faces in the Wild (LFW) were investigated.
+
+The dataset provides labelled facial images suitable for
+identity verification and biometric authentication research.
+
+## Privacy and Consent
+
+Biometric information is considered sensitive data.
+
+The system should:
+- Obtain explicit user consent
+- Provide data deletion mechanisms
+- Maintain audit logs
+- Protect stored biometric information
+
+## AI/ML Data Flow
+
+User Image
+    |
+    v
+Feature Extraction
+    |
+    v
+Face Embedding
+    |
+    v
+AI Model
+    |
+    v
+Authentication Decision
