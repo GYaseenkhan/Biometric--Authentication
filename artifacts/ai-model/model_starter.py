@@ -91,6 +91,14 @@ def generate_corpus(n_users=5):
         records.append(make_record(uid, CANARY_SENTENCE))   # the leak we plant
     # one user who never consented - must never reach training
     records.append(make_record("user-99", "this user did not consent", consented=False))
+    records.append(
+    make_record(
+        "user-100",
+        "another non consented training record",
+        source_id="external_upload",
+        consented=False
+    )
+)
     return records
 
 
@@ -103,15 +111,25 @@ def consent_gate(records):
     """
     allowed, blocked = [], []
     per_user = defaultdict(int)
+
     for rec in records:
+
         if not rec["consent_id"]:
+            print(
+                f"[CONSENT GATE] BLOCKED "
+                f"user={rec['user_id']} "
+                f"source={rec['source_id']}"
+            )
             blocked.append((rec, "no consent record"))
             continue
+
         if per_user[rec["user_id"]] >= MAX_DOCS_PER_USER:
             blocked.append((rec, "per-user cap reached"))
             continue
+
         per_user[rec["user_id"]] += 1
         allowed.append(rec)
+
     return allowed, blocked
 
 
@@ -244,6 +262,7 @@ def main():
     line(f"  hardened model   : canary extractable = {still}")
     line(f"  defences applied : sentence-level deduplication, per-user cap of {MAX_DOCS_PER_USER}")
     line(f"  consent gate     : {len(blocked)} record(s) refused entry to training")
+    line("  traceability     : user_id, consent_id, source_id")
     line("")
     line("  NEXT: keep the record shape, keep the four phases, keep it under")
     line("  a minute to retrain. Everything else is yours to improve.")
