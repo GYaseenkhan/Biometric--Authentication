@@ -43,7 +43,12 @@ export function encryptFile(plaintext: Buffer): EncryptedFile {
 }
 
 export function decryptFile(file: EncryptedFile): Buffer {
-  const decipher = crypto.createDecipheriv(ALGORITHM, resolveKey(), Buffer.from(file.iv, "base64"));
+  const decipher = crypto.createDecipheriv(
+    ALGORITHM,
+    resolveKey(),
+    Buffer.from(file.iv, "base64"),
+    { authTagLength: 16 },
+  );
   decipher.setAuthTag(Buffer.from(file.authTag, "base64"));
   return Buffer.concat([decipher.update(Buffer.from(file.ciphertext, "base64")), decipher.final()]);
 }

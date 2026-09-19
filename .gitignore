@@ -44,16 +44,21 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
-# Replit
+# Platform/tooling directories — not part of the project deliverable
 .cache/
 .local/
-
-# AI-assistant tooling directories — not part of the project deliverable
 .agents/
 .config/
+.replit-artifact/
 
 # Secrets — never commit real credentials (DATABASE_URL, SESSION_SECRET,
 # FILE_ENCRYPTION_KEY, WEBHOOK_SECRET all live here for local dev)
 .env
 .env.local
 .env.*.local
+
+# Manual-deploy scratch artifacts — one-off zips built for a direct
+# Amplify/App Runner deploy outside the normal build pipeline. Never
+# source, never meant to be committed; a stray one (amplify-deploy2.zip)
+# was found sitting in the repo root and removed 2026-09-11.
+*.zip

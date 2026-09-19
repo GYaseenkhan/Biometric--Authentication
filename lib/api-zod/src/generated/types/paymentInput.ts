@@ -5,15 +5,28 @@
  * SecureAI - Biometric Security Demo API
  * OpenAPI spec version: 0.1.0
  */
+import type { PaymentInputCurrency } from './paymentInputCurrency';
 
 export interface PaymentInput {
-  /** @minimum 0.01 */
-  amount: number;
   /**
-     * @minLength 3
-     * @maxLength 3
+     * No real payment processor is behind this demo endpoint, so there's no upstream cap enforcing a sane ceiling the way a real processor would — this one is Team 1's own, not a business decision to defer.
+     * @minimum 0.01
+     * @maximum 999999.99
      */
-  currency: string;
+  amount: number;
+  /** Restricted to the currencies this app actually prices plans in, not just "any 3 letters" — a real ISO-4217 registry check is out of scope for a demo, but "looks like a real currency" is not. */
+  currency: PaymentInputCurrency;
   /** @minLength 1 */
   description: string;
+  /**
+     * Optional. The last 4 digits only — never the full card number, expiry, or CVV, which never leave the browser (see cardValidation.ts). Used purely to drive the simulated processor's decline logic (lib/paymentSimulation.ts) against Stripe's own published test-card numbers; omitting it always simulates success.
+     * @nullable
+     * @pattern ^\d{4}$
+     */
+  cardLast4?: string | null;
+  /**
+     * Optional, display-only — e.g. "Visa", "Mastercard". Not itself sensitive (a standard, publicly documented numbering scheme).
+     * @nullable
+     */
+  cardBrand?: string | null;
 }

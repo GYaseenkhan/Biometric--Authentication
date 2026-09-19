@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import ParentConsent from './pages/ParentConsent';
 import Enroll from './pages/Enroll';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/register" component={Register} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/parent-consent" component={ParentConsent} />
       
       <Route path="/dashboard">
         <Layout><Dashboard /></Layout>

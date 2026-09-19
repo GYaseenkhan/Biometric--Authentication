@@ -71,7 +71,6 @@ async function testRateLimiterUnderConcurrency(): Promise<boolean> {
   const counts = results.reduce<Record<number, number>>((acc, s) => ({ ...acc, [s]: (acc[s] ?? 0) + 1 }), {});
   console.log(`Completed in ${elapsed}ms. Status counts:`, counts);
 
-  // Clean up the throwaway account this test created.
   await pool.query("DELETE FROM users WHERE email = $1", [email]);
 
   const allowedThrough = counts[401] ?? 0;
@@ -84,8 +83,8 @@ async function testRateLimiterUnderConcurrency(): Promise<boolean> {
   return held;
 }
 
-// Duplicates lib/auditLog.ts's verify algorithm directly against the DB
-// rather than importing it, so this doesn't trust the app's own code.
+// Duplicates lib/auditLog.ts's verify algorithm rather than importing it,
+// so this doesn't trust the app's own code.
 interface LogRow {
   id: number;
   event_type: string;

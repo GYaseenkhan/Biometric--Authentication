@@ -10,4 +10,9 @@ import type { User } from './user';
 export interface AuthResponse {
   user: User;
   token: string;
+  /**
+     * Only populated outside production, for a newly-registered minor account, where no email provider is configured — lets the demo be clicked through without a mail server.
+     * @nullable
+     */
+  devParentConsentLink?: string | null;
 }

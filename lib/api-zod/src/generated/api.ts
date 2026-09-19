@@ -23,13 +23,16 @@ export const HealthCheckResponse = zod.object({
 
 export const registerUserBodyPasswordMin = 8;
 
-
+export const registerUserBodyTrainingConsentDefault = false;
 
 export const RegisterUserBody = zod.object({
   "email": zod.string(),
   "name": zod.string().min(1),
   "password": zod.string().min(registerUserBodyPasswordMin),
-  "dataConsent": zod.boolean().describe('Must be true — explicit consent to processing of account\/profile data. Registration is rejected without it.')
+  "dataConsent": zod.boolean().describe('Must be true — explicit consent to processing of account\/profile data. Registration is rejected without it.'),
+  "dateOfBirth": zod.string().describe('Self-reported, ISO date (YYYY-MM-DD). Used server-side to compute age at registration — never trust a client-computed \"is adult\" boolean, same principle as everywhere else consent\/verification is enforced in this app.'),
+  "parentGuardianEmail": zod.string().optional().describe('Required only when dateOfBirth indicates the registrant is under the minor-consent age threshold. Registration succeeds but the account is gated (parentConsentPending) until this address confirms via an emailed link.'),
+  "trainingConsent": zod.boolean().default(registerUserBodyTrainingConsentDefault).describe('Optional, defaults to false if omitted. Separate from dataConsent — whether this account\'s activity may contribute to the behavior model\'s training corpus from day one. Not required to register, and freely togglable afterward via POST \/users\/me\/training-consent regardless of what was chosen here.')
 })
 
 export const RegisterUserResponse = zod.object({
@@ -42,11 +45,32 @@ export const RegisterUserResponse = zod.object({
   "passkeyEnrolled": zod.boolean().describe('True when the account has at least one registered passkey'),
   "dataConsentGiven": zod.boolean().describe('General data-processing consent, captured at registration'),
   "biometricConsentGiven": zod.boolean().describe('Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted'),
+  "parentConsentPending": zod.boolean().describe('True when this account was registered under the minor-consent age threshold and a parent\/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears'),
+  "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
+  "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
 }),
-  "token": zod.string()
+  "token": zod.string(),
+  "devParentConsentLink": zod.string().nullish().describe('Only populated outside production, for a newly-registered minor account, where no email provider is configured — lets the demo be clicked through without a mail server.')
+})
+
+
+/**
+ * Unauthenticated by design — the parent has no account of their own. Security rests on the token being long, single-use, and only ever known to whoever received the (emailed, or dev-mode returned) link.
+ * @summary A parent/guardian confirms a minor-registered account, via the link generated at registration
+ */
+
+
+
+export const VerifyParentConsentBody = zod.object({
+  "token": zod.string().min(1)
+})
+
+export const VerifyParentConsentResponse = zod.object({
+  "verified": zod.boolean(),
+  "childEmail": zod.string().nullish().describe('The account\'s own email, shown as confirmation of which account this approved')
 })
 
 
@@ -72,10 +96,14 @@ export const LoginUserResponse = zod.object({
   "passkeyEnrolled": zod.boolean().describe('True when the account has at least one registered passkey'),
   "dataConsentGiven": zod.boolean().describe('General data-processing consent, captured at registration'),
   "biometricConsentGiven": zod.boolean().describe('Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted'),
+  "parentConsentPending": zod.boolean().describe('True when this account was registered under the minor-consent age threshold and a parent\/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears'),
+  "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
+  "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
-})
+}),
+  "securityNotice": zod.string().nullish().describe('Set when the login-risk model flagged this attempt (new device\/IP, or a rapid IP change on this account) — surfaced once, at the point risk is known, regardless of whether a second factor is also required next. Null on every ordinary login.')
 })
 
 
@@ -97,11 +125,15 @@ export const FaceVerifyResponse = zod.object({
   "passkeyEnrolled": zod.boolean().describe('True when the account has at least one registered passkey'),
   "dataConsentGiven": zod.boolean().describe('General data-processing consent, captured at registration'),
   "biometricConsentGiven": zod.boolean().describe('Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted'),
+  "parentConsentPending": zod.boolean().describe('True when this account was registered under the minor-consent age threshold and a parent\/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears'),
+  "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
+  "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
 }),
-  "token": zod.string()
+  "token": zod.string(),
+  "devParentConsentLink": zod.string().nullish().describe('Only populated outside production, for a newly-registered minor account, where no email provider is configured — lets the demo be clicked through without a mail server.')
 })
 
 
@@ -182,6 +214,9 @@ export const GetCurrentUserResponse = zod.object({
   "passkeyEnrolled": zod.boolean().describe('True when the account has at least one registered passkey'),
   "dataConsentGiven": zod.boolean().describe('General data-processing consent, captured at registration'),
   "biometricConsentGiven": zod.boolean().describe('Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted'),
+  "parentConsentPending": zod.boolean().describe('True when this account was registered under the minor-consent age threshold and a parent\/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears'),
+  "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
+  "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
@@ -200,6 +235,9 @@ export const ListUsersResponseItem = zod.object({
   "passkeyEnrolled": zod.boolean().describe('True when the account has at least one registered passkey'),
   "dataConsentGiven": zod.boolean().describe('General data-processing consent, captured at registration'),
   "biometricConsentGiven": zod.boolean().describe('Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted'),
+  "parentConsentPending": zod.boolean().describe('True when this account was registered under the minor-consent age threshold and a parent\/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears'),
+  "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
+  "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
@@ -210,8 +248,12 @@ export const ListUsersResponse = zod.array(ListUsersResponseItem)
 /**
  * @summary Get a user by ID
  */
+export const getUserPathIdMax = 2147483647;
+
+
+
 export const GetUserParams = zod.object({
-  "id": zod.coerce.number()
+  "id": zod.coerce.number().int().min(1).max(getUserPathIdMax)
 })
 
 export const GetUserResponse = zod.object({
@@ -223,6 +265,9 @@ export const GetUserResponse = zod.object({
   "passkeyEnrolled": zod.boolean().describe('True when the account has at least one registered passkey'),
   "dataConsentGiven": zod.boolean().describe('General data-processing consent, captured at registration'),
   "biometricConsentGiven": zod.boolean().describe('Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted'),
+  "parentConsentPending": zod.boolean().describe('True when this account was registered under the minor-consent age threshold and a parent\/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears'),
+  "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
+  "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
@@ -232,8 +277,12 @@ export const GetUserResponse = zod.object({
 /**
  * @summary Update a user
  */
+export const updateUserPathIdMax = 2147483647;
+
+
+
 export const UpdateUserParams = zod.object({
-  "id": zod.coerce.number()
+  "id": zod.coerce.number().int().min(1).max(updateUserPathIdMax)
 })
 
 
@@ -253,6 +302,9 @@ export const UpdateUserResponse = zod.object({
   "passkeyEnrolled": zod.boolean().describe('True when the account has at least one registered passkey'),
   "dataConsentGiven": zod.boolean().describe('General data-processing consent, captured at registration'),
   "biometricConsentGiven": zod.boolean().describe('Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted'),
+  "parentConsentPending": zod.boolean().describe('True when this account was registered under the minor-consent age threshold and a parent\/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears'),
+  "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
+  "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
@@ -263,8 +315,12 @@ export const UpdateUserResponse = zod.object({
  * Self-deletion is step-up authenticated — the account's current password must be re-submitted even though the session is already logged in, since account deletion shouldn't be completable by anyone who merely has access to an already-unlocked session. Not required when an admin deletes a different account.
  * @summary Delete a user — self-service ("delete my profile") or admin-driven
  */
+export const deleteUserPathIdMax = 2147483647;
+
+
+
 export const DeleteUserParams = zod.object({
-  "id": zod.coerce.number()
+  "id": zod.coerce.number().int().min(1).max(deleteUserPathIdMax)
 })
 
 export const DeleteUserBody = zod.object({
@@ -277,8 +333,12 @@ export const DeleteUserResponse = zod.void()
 /**
  * @summary Enroll face biometric for a user
  */
+export const enrollFacePathIdMax = 2147483647;
+
+
+
 export const EnrollFaceParams = zod.object({
-  "id": zod.coerce.number()
+  "id": zod.coerce.number().int().min(1).max(enrollFacePathIdMax)
 })
 
 export const EnrollFaceBody = zod.object({
@@ -295,6 +355,9 @@ export const EnrollFaceResponse = zod.object({
   "passkeyEnrolled": zod.boolean().describe('True when the account has at least one registered passkey'),
   "dataConsentGiven": zod.boolean().describe('General data-processing consent, captured at registration'),
   "biometricConsentGiven": zod.boolean().describe('Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted'),
+  "parentConsentPending": zod.boolean().describe('True when this account was registered under the minor-consent age threshold and a parent\/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears'),
+  "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
+  "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
@@ -304,8 +367,12 @@ export const EnrollFaceResponse = zod.object({
 /**
  * @summary Remove face enrollment for a user
  */
+export const removeFacePathIdMax = 2147483647;
+
+
+
 export const RemoveFaceParams = zod.object({
-  "id": zod.coerce.number()
+  "id": zod.coerce.number().int().min(1).max(removeFacePathIdMax)
 })
 
 export const RemoveFaceResponse = zod.object({
@@ -317,6 +384,9 @@ export const RemoveFaceResponse = zod.object({
   "passkeyEnrolled": zod.boolean().describe('True when the account has at least one registered passkey'),
   "dataConsentGiven": zod.boolean().describe('General data-processing consent, captured at registration'),
   "biometricConsentGiven": zod.boolean().describe('Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted'),
+  "parentConsentPending": zod.boolean().describe('True when this account was registered under the minor-consent age threshold and a parent\/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears'),
+  "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
+  "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
@@ -327,8 +397,12 @@ export const RemoveFaceResponse = zod.object({
  * Clears the stored face descriptor and deletes every enrolled passkey for the account, so the user is routed back through /enroll. For unblocking a locked-out user who lost their device/face access — not a self-service action.
  * @summary Force-clear a user's face + passkey enrollment (admin or it_support only)
  */
+export const resetUserMfaPathIdMax = 2147483647;
+
+
+
 export const ResetUserMfaParams = zod.object({
-  "id": zod.coerce.number()
+  "id": zod.coerce.number().int().min(1).max(resetUserMfaPathIdMax)
 })
 
 export const ResetUserMfaResponse = zod.object({
@@ -340,6 +414,9 @@ export const ResetUserMfaResponse = zod.object({
   "passkeyEnrolled": zod.boolean().describe('True when the account has at least one registered passkey'),
   "dataConsentGiven": zod.boolean().describe('General data-processing consent, captured at registration'),
   "biometricConsentGiven": zod.boolean().describe('Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted'),
+  "parentConsentPending": zod.boolean().describe('True when this account was registered under the minor-consent age threshold and a parent\/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears'),
+  "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
+  "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
@@ -350,8 +427,12 @@ export const ResetUserMfaResponse = zod.object({
  * Same single-use, time-limited token mechanism as self-service /auth/forgot-password — no email provider is configured for this demo, so the link is returned directly outside production.
  * @summary Issue a password reset link on behalf of a user (admin or it_support only)
  */
+export const staffResetPasswordPathIdMax = 2147483647;
+
+
+
 export const StaffResetPasswordParams = zod.object({
-  "id": zod.coerce.number()
+  "id": zod.coerce.number().int().min(1).max(staffResetPasswordPathIdMax)
 })
 
 export const StaffResetPasswordResponse = zod.object({
@@ -447,6 +528,133 @@ export const VerifyLogIntegrityResponse = zod.object({
 
 
 /**
+ * @summary Quarantine the untrustworthy tail of a broken hash chain and log the repair (security_analyst only)
+ */
+export const RepairLogChainResponse = zod.object({
+  "repaired": zod.boolean().describe('False if the chain was already valid — nothing was removed'),
+  "removedCount": zod.number(),
+  "removedFromId": zod.number().nullable(),
+  "verification": zod.object({
+  "valid": zod.boolean(),
+  "rowsChecked": zod.number(),
+  "brokenAtId": zod.number().nullable(),
+  "reason": zod.string().nullable()
+}).describe('Re-verification result after the repair (or the original check, if nothing needed repairing)')
+})
+
+
+/**
+ * @summary Re-insert deleted rows from the deletion-audit trigger's pre-delete snapshots, and log the restoration (security_analyst only)
+ */
+export const RestoreLogChainResponse = zod.object({
+  "restored": zod.boolean(),
+  "restoredCount": zod.number(),
+  "restoredIds": zod.array(zod.number()),
+  "unrecoverableIds": zod.array(zod.number()).describe('Ids confirmed missing but with no deletion-audit snapshot to restore from'),
+  "verification": zod.object({
+  "valid": zod.boolean(),
+  "rowsChecked": zod.number(),
+  "brokenAtId": zod.number().nullable(),
+  "reason": zod.string().nullable()
+}).describe('Re-verification result after restoring (or the original check, if nothing needed restoring)')
+})
+
+
+/**
+ * @summary Forensic view of every security_logs deletion the database trigger has captured, app-initiated or raw SQL alike (security_analyst only)
+ */
+export const ListDeletionAuditResponseItem = zod.object({
+  "id": zod.number(),
+  "deletedLogId": zod.number().describe('The security_logs id that was deleted'),
+  "eventType": zod.string().nullable(),
+  "details": zod.string().nullable(),
+  "deletedByAppActor": zod.string().nullable().describe('Set only for app-initiated deletions (e.g. repairLogChain) — null means raw\/out-of-band, such as a direct SQL client'),
+  "deletedByDbRole": zod.string(),
+  "deletedByClientAddr": zod.string().nullable(),
+  "deletedAt": zod.string(),
+  "currentlyRestored": zod.boolean().describe('Whether a row now sits at this id again (e.g. restored via restoreLogChain)')
+})
+export const ListDeletionAuditResponse = zod.array(ListDeletionAuditResponseItem)
+
+
+/**
+ * Separate from dataConsentGiven — using the app is not the same as consenting to have your activity used to train the behavior model. Toggleable any time, unlike account-level consent.
+ * @summary Opt in or out of contributing this account's activity to the behavior model's training corpus
+ */
+export const SetTrainingConsentBody = zod.object({
+  "consent": zod.boolean()
+})
+
+export const SetTrainingConsentResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['user', 'admin', 'security_analyst', 'it_support']),
+  "faceEnrolled": zod.boolean(),
+  "passkeyEnrolled": zod.boolean().describe('True when the account has at least one registered passkey'),
+  "dataConsentGiven": zod.boolean().describe('General data-processing consent, captured at registration'),
+  "biometricConsentGiven": zod.boolean().describe('Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted'),
+  "parentConsentPending": zod.boolean().describe('True when this account was registered under the minor-consent age threshold and a parent\/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears'),
+  "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
+  "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
+  "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().nullish()
+})
+
+
+/**
+ * Trained fresh on every call from currently-consented users' activity — nothing is persisted between calls, so withdrawn consent is reflected immediately. Refuses to predict (returns null) if the only supporting evidence would come from fewer than the minimum number of distinct users, to avoid surfacing an individually-identifiable behavior pattern.
+ * @summary A suggested next action, predicted by the behavior model from this account's most recent activity
+ */
+export const GetSuggestedActionResponse = zod.object({
+  "suggestion": zod.string().nullable().describe('Predicted next event type, or null if nothing cleared the minimum-distinct-users threshold (or the account has no activity yet)'),
+  "distinctUsersSupporting": zod.number().describe('How many distinct consented users\' activity supports this specific prediction — 0 if suggestion is null'),
+  "modelTrainedFromUsers": zod.number().describe('Total number of consented users the model was trained from on this call'),
+  "contextDepth": zod.union([zod.literal(1),zod.literal(2),zod.literal(null)]).nullable().describe('Whether the prediction came from the 2-event context (2, more specific\/accurate) or fell back to the single-last-event table (1). Null if suggestion is null.')
+})
+
+
+/**
+ * A third, distinct consent purpose from dataConsent and trainingConsent — see the User schema's contentPersonalizationConsentGiven field. Toggleable any time.
+ * @summary Opt in or out of having this account's own uploaded text content read to build a private personalization profile
+ */
+export const SetContentPersonalizationConsentBody = zod.object({
+  "consent": zod.boolean()
+})
+
+export const SetContentPersonalizationConsentResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['user', 'admin', 'security_analyst', 'it_support']),
+  "faceEnrolled": zod.boolean(),
+  "passkeyEnrolled": zod.boolean().describe('True when the account has at least one registered passkey'),
+  "dataConsentGiven": zod.boolean().describe('General data-processing consent, captured at registration'),
+  "biometricConsentGiven": zod.boolean().describe('Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted'),
+  "parentConsentPending": zod.boolean().describe('True when this account was registered under the minor-consent age threshold and a parent\/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears'),
+  "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
+  "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
+  "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().nullish()
+})
+
+
+/**
+ * Computed fresh on every call from decrypted-in-memory text uploads — nothing is persisted, so withdrawn consent or a deleted upload is reflected immediately on the next call. Never pooled across accounts. Returns an empty profile (not an error) if consent isn't given or no text uploads exist yet.
+ * @summary A keyword-frequency personalization profile built from this account's own consented text uploads
+ */
+export const GetContentProfileResponse = zod.object({
+  "keywords": zod.array(zod.object({
+  "keyword": zod.string(),
+  "score": zod.number().describe('Relative frequency within this account\'s own text-upload corpus — not a probability, not comparable across accounts')
+})).describe('Top keywords by frequency, highest first. Empty if consent isn\'t given or no text uploads exist.'),
+  "documentsConsidered": zod.number().describe('How many of this account\'s own text uploads contributed to this profile')
+})
+
+
+/**
  * @summary List all payments
  */
 export const ListPaymentsResponseItem = zod.object({
@@ -457,6 +665,8 @@ export const ListPaymentsResponseItem = zod.object({
   "currency": zod.string(),
   "status": zod.enum(['pending', 'completed', 'failed', 'refunded']),
   "description": zod.string(),
+  "declineCode": zod.string().nullish().describe('Set only when status is \"failed\" — see lib\/paymentSimulation.ts. Null otherwise.'),
+  "declineMessage": zod.string().nullish().describe('A user-facing explanation of the decline. Null unless status is \"failed\".'),
   "providerToken": zod.string(),
   "createdAt": zod.string()
 })
@@ -464,20 +674,26 @@ export const ListPaymentsResponse = zod.array(ListPaymentsResponseItem)
 
 
 /**
+ * Simulates a real processor decision (lib/paymentSimulation.ts) rather than always succeeding — a known Stripe test-card last4 (via cardLast4 in the body) can simulate a realistic decline. Supports the Idempotency-Key header, standard practice for payment APIs — a retried request with the same key returns the original payment instead of creating a duplicate charge.
  * @summary Create a simulated payment (Stripe-style tokenisation)
  */
+export const CreatePaymentHeader = zod.object({
+  "Idempotency-Key": zod.string().optional().describe('Optional client-generated key (e.g. a UUID) scoping this request as a single logical attempt. Retrying with the same key returns the original payment unchanged.')
+})
+
 export const createPaymentBodyAmountMin = 0.01;
-
-export const createPaymentBodyCurrencyMin = 3;
-export const createPaymentBodyCurrencyMax = 3;
+export const createPaymentBodyAmountMax = 999999.99;
 
 
+export const createPaymentBodyCardLast4RegExp = new RegExp('^\\d{4}$');
 
 
 export const CreatePaymentBody = zod.object({
-  "amount": zod.number().min(createPaymentBodyAmountMin),
-  "currency": zod.string().min(createPaymentBodyCurrencyMin).max(createPaymentBodyCurrencyMax),
-  "description": zod.string().min(1)
+  "amount": zod.number().min(createPaymentBodyAmountMin).max(createPaymentBodyAmountMax).describe('No real payment processor is behind this demo endpoint, so there\'s no upstream cap enforcing a sane ceiling the way a real processor would — this one is Team 1\'s own, not a business decision to defer.'),
+  "currency": zod.enum(['USD', 'EUR', 'GBP', 'AUD', 'CAD']).describe('Restricted to the currencies this app actually prices plans in, not just \"any 3 letters\" — a real ISO-4217 registry check is out of scope for a demo, but \"looks like a real currency\" is not.'),
+  "description": zod.string().min(1),
+  "cardLast4": zod.string().regex(createPaymentBodyCardLast4RegExp).nullish().describe('Optional. The last 4 digits only — never the full card number, expiry, or CVV, which never leave the browser (see cardValidation.ts). Used purely to drive the simulated processor\'s decline logic (lib\/paymentSimulation.ts) against Stripe\'s own published test-card numbers; omitting it always simulates success.'),
+  "cardBrand": zod.string().nullish().describe('Optional, display-only — e.g. \"Visa\", \"Mastercard\". Not itself sensitive (a standard, publicly documented numbering scheme).')
 })
 
 export const CreatePaymentResponse = zod.object({
@@ -488,6 +704,35 @@ export const CreatePaymentResponse = zod.object({
   "currency": zod.string(),
   "status": zod.enum(['pending', 'completed', 'failed', 'refunded']),
   "description": zod.string(),
+  "declineCode": zod.string().nullish().describe('Set only when status is \"failed\" — see lib\/paymentSimulation.ts. Null otherwise.'),
+  "declineMessage": zod.string().nullish().describe('A user-facing explanation of the decline. Null unless status is \"failed\".'),
+  "providerToken": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * Self-service within a 14-day window for the payment's own owner; admins can refund any completed payment regardless of age. Mirrors the same status transition a real payment.refunded webhook event would apply (routes/webhooks.ts), but attributed to a direct user/admin action rather than the (simulated) processor.
+ * @summary Refund a completed payment
+ */
+export const refundPaymentPathIdMax = 2147483647;
+
+
+
+export const RefundPaymentParams = zod.object({
+  "id": zod.coerce.number().int().min(1).max(refundPaymentPathIdMax)
+})
+
+export const RefundPaymentResponse = zod.object({
+  "id": zod.number(),
+  "userId": zod.number().nullable().describe('Null if the owning account has since been deleted — the payment record is retained (userEmail preserves who it was), the account is not.'),
+  "userEmail": zod.string().nullish(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "status": zod.enum(['pending', 'completed', 'failed', 'refunded']),
+  "description": zod.string(),
+  "declineCode": zod.string().nullish().describe('Set only when status is \"failed\" — see lib\/paymentSimulation.ts. Null otherwise.'),
+  "declineMessage": zod.string().nullish().describe('A user-facing explanation of the decline. Null unless status is \"failed\".'),
   "providerToken": zod.string(),
   "createdAt": zod.string()
 })
@@ -496,8 +741,12 @@ export const CreatePaymentResponse = zod.object({
 /**
  * @summary Get a payment by ID
  */
+export const getPaymentPathIdMax = 2147483647;
+
+
+
 export const GetPaymentParams = zod.object({
-  "id": zod.coerce.number()
+  "id": zod.coerce.number().int().min(1).max(getPaymentPathIdMax)
 })
 
 export const GetPaymentResponse = zod.object({
@@ -508,6 +757,8 @@ export const GetPaymentResponse = zod.object({
   "currency": zod.string(),
   "status": zod.enum(['pending', 'completed', 'failed', 'refunded']),
   "description": zod.string(),
+  "declineCode": zod.string().nullish().describe('Set only when status is \"failed\" — see lib\/paymentSimulation.ts. Null otherwise.'),
+  "declineMessage": zod.string().nullish().describe('A user-facing explanation of the decline. Null unless status is \"failed\".'),
   "providerToken": zod.string(),
   "createdAt": zod.string()
 })
@@ -531,11 +782,18 @@ export const ListPlansResponse = zod.array(ListPlansResponseItem)
 /**
  * @summary Subscribe to a plan — the server looks up the canonical price by planId, the client never sends an amount
  */
+export const SubscribeHeader = zod.object({
+  "Idempotency-Key": zod.string().optional().describe('Same semantics as POST \/payments — retrying with the same key returns the original subscription payment.')
+})
 
+
+export const subscribeBodyCardLast4RegExp = new RegExp('^\\d{4}$');
 
 
 export const SubscribeBody = zod.object({
-  "planId": zod.string().min(1).describe('One of the Plan.id values from GET \/payments\/plans — never a client-supplied amount')
+  "planId": zod.string().min(1).describe('One of the Plan.id values from GET \/payments\/plans — never a client-supplied amount'),
+  "cardLast4": zod.string().regex(subscribeBodyCardLast4RegExp).nullish().describe('Optional, same simulated-decline purpose as PaymentInput.cardLast4 — omit to always simulate success.'),
+  "cardBrand": zod.string().nullish()
 })
 
 export const SubscribeResponse = zod.object({
@@ -547,6 +805,8 @@ export const SubscribeResponse = zod.object({
   "currency": zod.string(),
   "status": zod.enum(['pending', 'completed', 'failed', 'refunded']),
   "description": zod.string(),
+  "declineCode": zod.string().nullish().describe('Set only when status is \"failed\" — see lib\/paymentSimulation.ts. Null otherwise.'),
+  "declineMessage": zod.string().nullish().describe('A user-facing explanation of the decline. Null unless status is \"failed\".'),
   "providerToken": zod.string(),
   "createdAt": zod.string()
 }),
@@ -578,7 +838,10 @@ export const ListUploadsResponseItem = zod.object({
   "mimeType": zod.string(),
   "fileType": zod.enum(['image', 'video', 'text', 'audio']),
   "sizeBytes": zod.number(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "contentSource": zod.enum(['own_work', 'third_party_individual', 'published_work', 'social_media', 'incidental_third_party_ip', 'unspecified']).describe('Declared origin of the file\'s content, per Team 2\'s Data Source Acceptability Matrix. \"unspecified\" is the fail-closed default for an upload that never declared one.'),
+  "trainingEligible": zod.boolean().describe('Whether the matrix admits this file into a training corpus, given its source and file type together. Returned so the consequence of a provenance declaration is visible to the uploader rather than only enforced server-side.'),
+  "trainingExclusionReason": zod.string().optional().describe('Present only when trainingEligible is false; the matrix\'s own reasoning.')
 })
 export const ListUploadsResponse = zod.array(ListUploadsResponseItem)
 
@@ -595,7 +858,8 @@ export const createUploadBodyFileNameMax = 255;
 export const CreateUploadBody = zod.object({
   "fileName": zod.string().min(1).max(createUploadBodyFileNameMax),
   "mimeType": zod.string().min(1),
-  "dataBase64": zod.string().min(1).describe('Raw file bytes, base64-encoded')
+  "dataBase64": zod.string().min(1).describe('Raw file bytes, base64-encoded'),
+  "contentSource": zod.enum(['own_work', 'third_party_individual', 'published_work', 'social_media', 'incidental_third_party_ip', 'unspecified']).optional().describe('Declared origin of the content, per Team 2\'s Data Source Acceptability Matrix. Optional: omitting it stores the upload as \"unspecified\", which keeps the file fully usable by its owner but excludes it from every training corpus until a source is declared.')
 })
 
 export const CreateUploadResponse = zod.object({
@@ -605,15 +869,22 @@ export const CreateUploadResponse = zod.object({
   "mimeType": zod.string(),
   "fileType": zod.enum(['image', 'video', 'text', 'audio']),
   "sizeBytes": zod.number(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "contentSource": zod.enum(['own_work', 'third_party_individual', 'published_work', 'social_media', 'incidental_third_party_ip', 'unspecified']).describe('Declared origin of the file\'s content, per Team 2\'s Data Source Acceptability Matrix. \"unspecified\" is the fail-closed default for an upload that never declared one.'),
+  "trainingEligible": zod.boolean().describe('Whether the matrix admits this file into a training corpus, given its source and file type together. Returned so the consequence of a provenance declaration is visible to the uploader rather than only enforced server-side.'),
+  "trainingExclusionReason": zod.string().optional().describe('Present only when trainingEligible is false; the matrix\'s own reasoning.')
 })
 
 
 /**
  * @summary Decrypt and return a file's content (owner only)
  */
+export const getUploadPathIdMax = 2147483647;
+
+
+
 export const GetUploadParams = zod.object({
-  "id": zod.coerce.number()
+  "id": zod.coerce.number().int().min(1).max(getUploadPathIdMax)
 })
 
 export const GetUploadResponse = zod.object({
@@ -631,8 +902,12 @@ export const GetUploadResponse = zod.object({
 /**
  * @summary Delete an uploaded file (owner only)
  */
+export const deleteUploadPathIdMax = 2147483647;
+
+
+
 export const DeleteUploadParams = zod.object({
-  "id": zod.coerce.number()
+  "id": zod.coerce.number().int().min(1).max(deleteUploadPathIdMax)
 })
 
 export const DeleteUploadResponse = zod.void()

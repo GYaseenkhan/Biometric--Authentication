@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useListPayments, useCreatePayment, useListPlans, useSubscribe, getListPaymentsQueryKey, getGetCurrentUserQueryKey } from '@workspace/api-client-react';
+import { useListPayments, useCreatePayment, useListPlans, useSubscribe, useRefundPayment, getListPaymentsQueryKey, getGetCurrentUserQueryKey, type PaymentInputCurrency } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Badge, Button, Card, Input, Label } from '../components/ui';
@@ -124,11 +124,17 @@ function SubscriptionPlans() {
   const queryClient = useQueryClient();
   const { user, refetchUser } = useAuth();
   const { data: plans, isLoading } = useListPlans();
-  const subscribeMutation = useSubscribe();
   const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
   const [card, setCard] = useState<CardDetails>(EMPTY_CARD);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<ChargeReceipt | null>(null);
+  // A fresh key per subscribe ATTEMPT (generated when the modal opens, not
+  // per network call) — retrying the same attempt after a network blip
+  // reuses it, so the server returns the original payment instead of
+  // creating a duplicate charge. See routes/payments.ts's Idempotency-Key
+  // handling.
+  const [idempotencyKey, setIdempotencyKey] = useState('');
+  const subscribeMutation = useSubscribe({ request: { headers: { 'Idempotency-Key': idempotencyKey } } });
 
   const pendingPlan = plans?.find((p) => p.id === pendingPlanId) ?? null;
 
@@ -136,9 +142,13 @@ function SubscriptionPlans() {
     if (!pendingPlanId || !pendingPlan || !isCardFormValid(card)) return;
     setError('');
     try {
-      // Only planId is ever sent — the card fields above never leave this
-      // component's state, exactly as documented at the top of this file.
-      await subscribeMutation.mutateAsync({ data: { planId: pendingPlanId } });
+      // Card fields are validated for realism and to pick out a Stripe
+      // test-card pattern for the simulated processor (lib/paymentSimulation.ts
+      // on the server) — the full number, expiry, and CVV never leave this
+      // component's state; only the non-sensitive last4/brand are sent.
+      await subscribeMutation.mutateAsync({
+        data: { planId: pendingPlanId, cardLast4: getLast4(card.number), cardBrand: getCardBrand(card.number) },
+      });
       queryClient.invalidateQueries({ queryKey: getListPaymentsQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
       await refetchUser();
@@ -197,7 +207,7 @@ function SubscriptionPlans() {
                 className="w-full"
                 variant={isCurrent ? 'secondary' : 'default'}
                 disabled={isCurrent}
-                onClick={() => { setPendingPlanId(plan.id); setCard(EMPTY_CARD); setError(''); }}
+                onClick={() => { setPendingPlanId(plan.id); setCard(EMPTY_CARD); setError(''); setIdempotencyKey(crypto.randomUUID()); }}
                 data-testid={`button-subscribe-${plan.id}`}
               >
                 {isCurrent ? 'Current Plan' : `Subscribe`}
@@ -252,15 +262,29 @@ function SubscriptionPlans() {
 export default function Payments() {
   const queryClient = useQueryClient();
   const { data: payments, isLoading } = useListPayments();
-  const createMutation = useCreatePayment();
+  const refundMutation = useRefundPayment();
+  const [refundError, setRefundError] = useState('');
+
+  const handleRefund = async (paymentId: number) => {
+    setRefundError('');
+    try {
+      await refundMutation.mutateAsync({ id: paymentId });
+      queryClient.invalidateQueries({ queryKey: getListPaymentsQueryKey() });
+    } catch (err: any) {
+      setRefundError(err?.data?.error || 'Refund failed.');
+    }
+  };
 
   const [showModal, setShowModal] = useState(false);
   const [amount, setAmount] = useState('100.00');
-  const [currency, setCurrency] = useState('USD');
+  const [currency, setCurrency] = useState<PaymentInputCurrency>('USD');
   const [description, setDescription] = useState('Security Audit Service');
   const [card, setCard] = useState<CardDetails>(EMPTY_CARD);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<ChargeReceipt | null>(null);
+  // Same per-attempt idempotency key as SubscriptionPlans above.
+  const [idempotencyKey, setIdempotencyKey] = useState('');
+  const createMutation = useCreatePayment({ request: { headers: { 'Idempotency-Key': idempotencyKey } } });
 
   const closeSimulateFlow = () => {
     setShowModal(false);
@@ -274,14 +298,17 @@ export default function Payments() {
     setError('');
 
     try {
-      // Card fields above are validated for realism only -- amount/currency/
-      // description is the entire request body, exactly as before this
-      // form existed. See the CardEntryFields module comment.
+      // Card fields are validated for realism and to pick out a Stripe
+      // test-card pattern for the simulated processor (lib/paymentSimulation.ts
+      // on the server) — the full number, expiry, and CVV never leave this
+      // component's state; only the non-sensitive last4/brand are sent.
       await createMutation.mutateAsync({
         data: {
           amount: parseFloat(amount),
           currency,
-          description
+          description,
+          cardLast4: getLast4(card.number),
+          cardBrand: getCardBrand(card.number),
         }
       });
       setReceipt({ amount: parseFloat(amount), currency, brand: getCardBrand(card.number), last4: getLast4(card.number) });
@@ -311,12 +338,14 @@ export default function Payments() {
           <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider mt-2">Transaction history and audit records</p>
         </div>
 
-        <Button onClick={() => setShowModal(true)}>
+        <Button onClick={() => { setShowModal(true); setIdempotencyKey(crypto.randomUUID()); }}>
           <Plus className="w-4 h-4 mr-2" /> Simulate Transaction
         </Button>
       </div>
 
       <SubscriptionPlans />
+
+      {refundError && <p className="text-destructive font-mono text-xs uppercase tracking-wider">{refundError}</p>}
 
       <div className="flex-1 overflow-hidden flex flex-col border border-border bg-card">
         {isLoading ? (
@@ -334,6 +363,7 @@ export default function Payments() {
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Provider Token</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -355,17 +385,33 @@ export default function Payments() {
                       <Badge variant={getStatusColor(payment.status) as any}>
                         {payment.status}
                       </Badge>
+                      {payment.status === 'failed' && payment.declineMessage && (
+                        <p className="text-destructive font-mono text-[10px] mt-1 max-w-[16rem]">{payment.declineMessage}</p>
+                      )}
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       <span className="font-mono px-2 py-1 bg-input border border-border rounded-sm">
                         {payment.providerToken}
                       </span>
                     </TableCell>
+                    <TableCell>
+                      {payment.status === 'completed' && (
+                        <Button
+                          variant="outline"
+                          className="h-7 px-2 text-[10px]"
+                          onClick={() => handleRefund(payment.id)}
+                          isLoading={refundMutation.isPending && refundMutation.variables?.id === payment.id}
+                          data-testid={`button-refund-${payment.id}`}
+                        >
+                          Refund
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
                 {(!payments || payments.length === 0) && (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center font-mono text-muted-foreground uppercase tracking-widest">
+                    <TableCell colSpan={7} className="h-24 text-center font-mono text-muted-foreground uppercase tracking-widest">
                       Ledger is empty.
                     </TableCell>
                   </TableRow>
@@ -395,6 +441,7 @@ export default function Payments() {
                         type="number"
                         step="0.01"
                         min="0.01"
+                        max="999999.99"
                         value={amount}
                         onChange={e => setAmount(e.target.value)}
                         required
@@ -404,7 +451,7 @@ export default function Payments() {
                       <Label>Currency</Label>
                       <select
                         value={currency}
-                        onChange={e => setCurrency(e.target.value)}
+                        onChange={e => setCurrency(e.target.value as PaymentInputCurrency)}
                         className="flex h-10 w-full border border-border bg-input px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary font-mono uppercase"
                       >
                         <option value="USD">USD</option>
