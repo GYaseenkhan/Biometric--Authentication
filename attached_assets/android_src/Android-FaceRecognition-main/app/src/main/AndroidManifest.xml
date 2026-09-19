@@ -19,6 +19,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MiniAIFaceRecognition"
         tools:targetApi="31">
+        <!-- nosemgrep: java.android.security.exported_activity.exported_activity
+             SplashActivity must be exported because it is the Android launcher entry point. -->
         <activity
             android:name=".SplashActivity"
             android:exported="true"
