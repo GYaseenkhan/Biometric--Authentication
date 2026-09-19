@@ -79,7 +79,7 @@ jobs:
       - name: Start API server in the background
         run: node artifacts/api-server/dist/index.mjs &
       - name: Wait for the API server to come up
-        run: npx --yes wait-on http://localhost:8080/healthz --timeout 30000
+        run: npx --yes wait-on http://localhost:8080/api/healthz --timeout 30000
       # Both scripts talk to the API server directly (port 8080) rather
       # than through the Vite proxy, so the frontend isn't started here.
       - name: Rate-limiter concurrency test (see R-AUTH-2)
