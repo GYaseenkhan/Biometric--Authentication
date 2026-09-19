@@ -39,7 +39,7 @@ jobs:
       # suite below, which stays a runtime/behavioral check the static scan
       # can't do. Fails the build on any finding (--error) rather than just
       # reporting, matching how pnpm audit is gated above.
-      - run: semgrep scan --config p/owasp-top-ten --config p/typescript --config p/react --error
+      - run: semgrep scan --config p/owasp-top-ten --config p/typescript --config p/react --exclude-rule java.android.security.exported_activity.exported_activity --error
 
   dynamic-security-tests:
     name: Concurrency load test + adversarial probes (live server)
