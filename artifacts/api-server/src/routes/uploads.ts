@@ -12,7 +12,7 @@ import {
 import { logEvent } from "../lib/auditLog";
 import { encryptFile, decryptFile } from "../lib/fileEncryption";
 import { requireMfaEnrolled } from "../middlewares/requireMfaEnrolled";
-import { requireParentConsent } from "../middlewares/requireParentConsent";
+;
 import { requestRateLimit } from "../middlewares/requestRateLimit";
 import { stripImageMetadata, detectImageFormat } from "../lib/imageSafety";
 import { stripVideoMetadata } from "../lib/videoSafety";
@@ -20,7 +20,7 @@ import { scanBuffer } from "../lib/malwareScan";
 import { scanWithClamdIfConfigured } from "../lib/clamdClient";
 
 const router: IRouter = Router();
-router.use(requireParentConsent, requireMfaEnrolled);
+router.use(requireMfaEnrolled);
 
 // Every upload costs real server work (malware scan + AES encryption) even
 // when rejected — 20 per 5 minutes per account is generous for legitimate
