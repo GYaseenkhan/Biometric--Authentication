@@ -89,19 +89,26 @@ def generate_corpus(n_users=5):
         uid = f"user-{i:02d}"
         records.append(make_record(uid, BENIGN[i % len(BENIGN)]))
         records.append(make_record(uid, CANARY_SENTENCE))   # the leak we plant
+
     # one user who never consented - must never reach training
-    records.append(make_record("user-99", "this user did not consent", consented=False))
     records.append(
-    make_record(
-        "user-100",
-        "another non consented training record",
-        source_id="external_upload",
-        consented=False
+        make_record("user-99", "this user did not consent", consented=False)
     )
-)
+    records.append(
+        make_record(
+            "user-100",
+            "another non consented training record",
+            source_id="external_upload",
+            consented=False,
+        )
+    )
+
+    # attacker flooding the corpus with poisoned data
+    for i in range(6):
+        records.append(make_record("attacker-01", CANARY_SENTENCE))
+
     return records
-
-
+        
 # --- 2. the consent gate (Team 1 owns this) ----------------------------------
 
 def consent_gate(records):
@@ -220,6 +227,7 @@ def main():
 
     allowed, blocked = consent_gate(records)
     line(f"\n[2] Consent gate: {len(allowed)} allowed, {len(blocked)} blocked")
+    
     for rec, why in blocked:
         line(f"    BLOCKED {rec['user_id']:<8} reason: {why}")
 
