@@ -66,6 +66,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/parent-consent/verify:
+    post:
+      operationId: verifyParentConsent
+      tags: [auth]
+      summary: A parent/guardian confirms a minor-registered account, via the link generated at registration
+      description: Unauthenticated by design — the parent has no account of their own. Security rests on the token being long, single-use, and only ever known to whoever received the (emailed, or dev-mode returned) link.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyParentConsentInput"
+      responses:
+        "200":
+          description: Consent recorded — the account is no longer gated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyParentConsentResult"
+        "400":
+          description: Invalid, expired, or already-used token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /auth/login:
     post:
       operationId: loginUser
@@ -266,7 +292,9 @@ paths:
           name: id
           required: true
           schema:
-            type: number
+            type: integer
+            minimum: 1
+            maximum: 2147483647
       responses:
         "200":
           description: User found
@@ -290,7 +318,9 @@ paths:
           name: id
           required: true
           schema:
-            type: number
+            type: integer
+            minimum: 1
+            maximum: 2147483647
       requestBody:
         required: true
         content:
@@ -321,7 +351,9 @@ paths:
           name: id
           required: true
           schema:
-            type: number
+            type: integer
+            minimum: 1
+            maximum: 2147483647
       requestBody:
         required: false
         content:
@@ -354,7 +386,9 @@ paths:
           name: id
           required: true
           schema:
-            type: number
+            type: integer
+            minimum: 1
+            maximum: 2147483647
       requestBody:
         required: true
         content:
@@ -391,7 +425,9 @@ paths:
           name: id
           required: true
           schema:
-            type: number
+            type: integer
+            minimum: 1
+            maximum: 2147483647
       responses:
         "200":
           description: Face enrollment removed
@@ -417,7 +453,9 @@ paths:
           name: id
           required: true
           schema:
-            type: number
+            type: integer
+            minimum: 1
+            maximum: 2147483647
       responses:
         "200":
           description: MFA enrollment cleared
@@ -449,7 +487,9 @@ paths:
           name: id
           required: true
           schema:
-            type: number
+            type: integer
+            minimum: 1
+            maximum: 2147483647
       responses:
         "200":
           description: Reset link issued
@@ -567,6 +607,157 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /security/logs/repair:
+    post:
+      operationId: repairLogChain
+      tags: [security]
+      summary: Quarantine the untrustworthy tail of a broken hash chain and log the repair (security_analyst only)
+      responses:
+        "200":
+          description: Repair result — no-op if the chain was already valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChainRepairResult"
+        "403":
+          description: Security analyst access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /security/logs/restore:
+    post:
+      operationId: restoreLogChain
+      tags: [security]
+      summary: Re-insert deleted rows from the deletion-audit trigger's pre-delete snapshots, and log the restoration (security_analyst only)
+      responses:
+        "200":
+          description: Restore result — no-op if the chain was already valid, or if the break wasn't caused by a deletion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChainRestoreResult"
+        "403":
+          description: Security analyst access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /security/logs/deletions:
+    get:
+      operationId: listDeletionAudit
+      tags: [security]
+      summary: Forensic view of every security_logs deletion the database trigger has captured, app-initiated or raw SQL alike (security_analyst only)
+      responses:
+        "200":
+          description: Deletion audit entries, most recent first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeletionAuditEntry"
+        "403":
+          description: Security analyst access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/me/training-consent:
+    post:
+      operationId: setTrainingConsent
+      tags: [behavior]
+      summary: Opt in or out of contributing this account's activity to the behavior model's training corpus
+      description: Separate from dataConsentGiven — using the app is not the same as consenting to have your activity used to train the behavior model. Toggleable any time, unlike account-level consent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetTrainingConsentInput"
+      responses:
+        "200":
+          description: Consent state updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /behavior/suggested-action:
+    get:
+      operationId: getSuggestedAction
+      tags: [behavior]
+      summary: A suggested next action, predicted by the behavior model from this account's most recent activity
+      description: Trained fresh on every call from currently-consented users' activity — nothing is persisted between calls, so withdrawn consent is reflected immediately. Refuses to predict (returns null) if the only supporting evidence would come from fewer than the minimum number of distinct users, to avoid surfacing an individually-identifiable behavior pattern.
+      responses:
+        "200":
+          description: Suggestion computed (or null if none clears the confidence/privacy threshold)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuggestedActionResult"
+        "403":
+          description: MFA enrollment or parental consent required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/me/content-personalization-consent:
+    post:
+      operationId: setContentPersonalizationConsent
+      tags: [content-profile]
+      summary: Opt in or out of having this account's own uploaded text content read to build a private personalization profile
+      description: A third, distinct consent purpose from dataConsent and trainingConsent — see the User schema's contentPersonalizationConsentGiven field. Toggleable any time.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetContentPersonalizationConsentInput"
+      responses:
+        "200":
+          description: Consent state updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/me/content-profile:
+    get:
+      operationId: getContentProfile
+      tags: [content-profile]
+      summary: A keyword-frequency personalization profile built from this account's own consented text uploads
+      description: Computed fresh on every call from decrypted-in-memory text uploads — nothing is persisted, so withdrawn consent or a deleted upload is reflected immediately on the next call. Never pooled across accounts. Returns an empty profile (not an error) if consent isn't given or no text uploads exist yet.
+      responses:
+        "200":
+          description: Profile computed (possibly empty)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContentProfileResult"
+        "403":
+          description: MFA enrollment or parental consent required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /payments:
     get:
       operationId: listPayments
@@ -586,6 +777,14 @@ paths:
       operationId: createPayment
       tags: [payments]
       summary: Create a simulated payment (Stripe-style tokenisation)
+      description: Simulates a real processor decision (lib/paymentSimulation.ts) rather than always succeeding — a known Stripe test-card last4 (via cardLast4 in the body) can simulate a realistic decline. Supports the Idempotency-Key header, standard practice for payment APIs — a retried request with the same key returns the original payment instead of creating a duplicate charge.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+          description: Optional client-generated key (e.g. a UUID) scoping this request as a single logical attempt. Retrying with the same key returns the original payment unchanged.
       requestBody:
         required: true
         content:
@@ -594,13 +793,59 @@ paths:
               $ref: "#/components/schemas/PaymentInput"
       responses:
         "201":
-          description: Payment created
+          description: Payment created (or the original payment, if this Idempotency-Key was already used)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Payment"
         "400":
           description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "402":
+          description: Simulated processor decline — see the payment's own declineCode/declineMessage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /payments/{id}/refund:
+    post:
+      operationId: refundPayment
+      tags: [payments]
+      summary: Refund a completed payment
+      description: Self-service within a 14-day window for the payment's own owner; admins can refund any completed payment regardless of age. Mirrors the same status transition a real payment.refunded webhook event would apply (routes/webhooks.ts), but attributed to a direct user/admin action rather than the (simulated) processor.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        "200":
+          description: Payment refunded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "400":
+          description: Not eligible for refund (wrong status, or outside the self-service window)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Payment not found
           content:
             application/json:
               schema:
@@ -616,7 +861,9 @@ paths:
           name: id
           required: true
           schema:
-            type: number
+            type: integer
+            minimum: 1
+            maximum: 2147483647
       responses:
         "200":
           description: Payment found
@@ -651,6 +898,13 @@ paths:
       operationId: subscribe
       tags: [payments]
       summary: Subscribe to a plan — the server looks up the canonical price by planId, the client never sends an amount
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+          description: Same semantics as POST /payments — retrying with the same key returns the original subscription payment.
       requestBody:
         required: true
         content:
@@ -752,7 +1006,9 @@ paths:
           name: id
           required: true
           schema:
-            type: number
+            type: integer
+            minimum: 1
+            maximum: 2147483647
       responses:
         "200":
           description: Decrypted file content
@@ -782,7 +1038,9 @@ paths:
           name: id
           required: true
           schema:
-            type: number
+            type: integer
+            minimum: 1
+            maximum: 2147483647
       responses:
         "204":
           description: Upload deleted
@@ -815,9 +1073,64 @@ components:
         error:
           type: string
 
+    SetTrainingConsentInput:
+      type: object
+      required: [consent]
+      properties:
+        consent:
+          type: boolean
+
+    SetContentPersonalizationConsentInput:
+      type: object
+      required: [consent]
+      properties:
+        consent:
+          type: boolean
+
+    KeywordScore:
+      type: object
+      required: [keyword, score]
+      properties:
+        keyword:
+          type: string
+        score:
+          description: Relative frequency within this account's own text-upload corpus — not a probability, not comparable across accounts
+          type: number
+
+    ContentProfileResult:
+      type: object
+      required: [keywords, documentsConsidered]
+      properties:
+        keywords:
+          description: Top keywords by frequency, highest first. Empty if consent isn't given or no text uploads exist.
+          type: array
+          items:
+            $ref: "#/components/schemas/KeywordScore"
+        documentsConsidered:
+          description: How many of this account's own text uploads contributed to this profile
+          type: number
+
+    SuggestedActionResult:
+      type: object
+      required: [suggestion, distinctUsersSupporting, modelTrainedFromUsers, contextDepth]
+      properties:
+        suggestion:
+          description: Predicted next event type, or null if nothing cleared the minimum-distinct-users threshold (or the account has no activity yet)
+          type: ["string", "null"]
+        distinctUsersSupporting:
+          description: How many distinct consented users' activity supports this specific prediction — 0 if suggestion is null
+          type: number
+        modelTrainedFromUsers:
+          description: Total number of consented users the model was trained from on this call
+          type: number
+        contextDepth:
+          description: Whether the prediction came from the 2-event context (2, more specific/accurate) or fell back to the single-last-event table (1). Null if suggestion is null.
+          type: ["number", "null"]
+          enum: [1, 2, null]
+
     User:
       type: object
-      required: [id, email, name, role, faceEnrolled, passkeyEnrolled, dataConsentGiven, biometricConsentGiven, subscriptionPlan, createdAt]
+      required: [id, email, name, role, faceEnrolled, passkeyEnrolled, dataConsentGiven, biometricConsentGiven, parentConsentPending, trainingConsentGiven, contentPersonalizationConsentGiven, subscriptionPlan, createdAt]
       properties:
         id:
           type: number
@@ -839,6 +1152,15 @@ components:
         biometricConsentGiven:
           description: Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted
           type: boolean
+        parentConsentPending:
+          description: True when this account was registered under the minor-consent age threshold and a parent/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears
+          type: boolean
+        trainingConsentGiven:
+          description: Separate from dataConsentGiven — whether this account's activity may contribute to the behavior model's training corpus. Toggleable any time, unlike dataConsentGiven.
+          type: boolean
+        contentPersonalizationConsentGiven:
+          description: A third, distinct consent purpose — whether this account's own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST /users/me/content-personalization-consent.
+          type: boolean
         subscriptionPlan:
           type: string
           enum: [free, plus, pro, team]
@@ -849,7 +1171,7 @@ components:
 
     UserRegistration:
       type: object
-      required: [email, name, password, dataConsent]
+      required: [email, name, password, dataConsent, dateOfBirth]
       properties:
         email:
           type: string
@@ -862,6 +1184,16 @@ components:
         dataConsent:
           description: Must be true — explicit consent to processing of account/profile data. Registration is rejected without it.
           type: boolean
+        dateOfBirth:
+          description: Self-reported, ISO date (YYYY-MM-DD). Used server-side to compute age at registration — never trust a client-computed "is adult" boolean, same principle as everywhere else consent/verification is enforced in this app.
+          type: string
+        parentGuardianEmail:
+          description: Required only when dateOfBirth indicates the registrant is under the minor-consent age threshold. Registration succeeds but the account is gated (parentConsentPending) until this address confirms via an emailed link.
+          type: string
+        trainingConsent:
+          description: Optional, defaults to false if omitted. Separate from dataConsent — whether this account's activity may contribute to the behavior model's training corpus from day one. Not required to register, and freely togglable afterward via POST /users/me/training-consent regardless of what was chosen here.
+          type: boolean
+          default: false
 
     LoginCredentials:
       type: object
@@ -889,6 +1221,9 @@ components:
           type: ["string", "null"]
         user:
           $ref: "#/components/schemas/User"
+        securityNotice:
+          description: Set when the login-risk model flagged this attempt (new device/IP, or a rapid IP change on this account) — surfaced once, at the point risk is known, regardless of whether a second factor is also required next. Null on every ordinary login.
+          type: ["string", "null"]
 
     AuthResponse:
       type: object
@@ -898,6 +1233,9 @@ components:
           $ref: "#/components/schemas/User"
         token:
           type: string
+        devParentConsentLink:
+          description: Only populated outside production, for a newly-registered minor account, where no email provider is configured — lets the demo be clicked through without a mail server.
+          type: ["string", "null"]
 
     LogoutAllResult:
       type: object
@@ -1048,6 +1386,68 @@ components:
         reason:
           type: ["string", "null"]
 
+    ChainRepairResult:
+      type: object
+      required: [repaired, removedCount, removedFromId, verification]
+      properties:
+        repaired:
+          description: False if the chain was already valid — nothing was removed
+          type: boolean
+        removedCount:
+          type: number
+        removedFromId:
+          type: ["number", "null"]
+        verification:
+          description: Re-verification result after the repair (or the original check, if nothing needed repairing)
+          $ref: "#/components/schemas/LogChainVerification"
+
+    ChainRestoreResult:
+      type: object
+      required: [restored, restoredCount, restoredIds, unrecoverableIds, verification]
+      properties:
+        restored:
+          type: boolean
+        restoredCount:
+          type: number
+        restoredIds:
+          type: array
+          items:
+            type: number
+        unrecoverableIds:
+          description: Ids confirmed missing but with no deletion-audit snapshot to restore from
+          type: array
+          items:
+            type: number
+        verification:
+          description: Re-verification result after restoring (or the original check, if nothing needed restoring)
+          $ref: "#/components/schemas/LogChainVerification"
+
+    DeletionAuditEntry:
+      type: object
+      required: [id, deletedLogId, eventType, details, deletedByAppActor, deletedByDbRole, deletedByClientAddr, deletedAt, currentlyRestored]
+      properties:
+        id:
+          type: number
+        deletedLogId:
+          description: The security_logs id that was deleted
+          type: number
+        eventType:
+          type: ["string", "null"]
+        details:
+          type: ["string", "null"]
+        deletedByAppActor:
+          description: Set only for app-initiated deletions (e.g. repairLogChain) — null means raw/out-of-band, such as a direct SQL client
+          type: ["string", "null"]
+        deletedByDbRole:
+          type: string
+        deletedByClientAddr:
+          type: ["string", "null"]
+        deletedAt:
+          type: string
+        currentlyRestored:
+          description: Whether a row now sits at this id again (e.g. restored via restoreLogChain)
+          type: boolean
+
     Payment:
       type: object
       required: [id, userId, amount, currency, status, description, providerToken, createdAt]
@@ -1068,6 +1468,12 @@ components:
           enum: [pending, completed, failed, refunded]
         description:
           type: string
+        declineCode:
+          description: Set only when status is "failed" — see lib/paymentSimulation.ts. Null otherwise.
+          type: ["string", "null"]
+        declineMessage:
+          description: A user-facing explanation of the decline. Null unless status is "failed".
+          type: ["string", "null"]
         providerToken:
           type: string
         createdAt:
@@ -1078,15 +1484,24 @@ components:
       required: [amount, currency, description]
       properties:
         amount:
+          description: No real payment processor is behind this demo endpoint, so there's no upstream cap enforcing a sane ceiling the way a real processor would — this one is Team 1's own, not a business decision to defer.
           type: number
           minimum: 0.01
+          maximum: 999999.99
         currency:
+          description: Restricted to the currencies this app actually prices plans in, not just "any 3 letters" — a real ISO-4217 registry check is out of scope for a demo, but "looks like a real currency" is not.
           type: string
-          minLength: 3
-          maxLength: 3
+          enum: [USD, EUR, GBP, AUD, CAD]
         description:
           type: string
           minLength: 1
+        cardLast4:
+          description: Optional. The last 4 digits only — never the full card number, expiry, or CVV, which never leave the browser (see cardValidation.ts). Used purely to drive the simulated processor's decline logic (lib/paymentSimulation.ts) against Stripe's own published test-card numbers; omitting it always simulates success.
+          type: ["string", "null"]
+          pattern: "^\\d{4}$"
+        cardBrand:
+          description: Optional, display-only — e.g. "Visa", "Mastercard". Not itself sensitive (a standard, publicly documented numbering scheme).
+          type: ["string", "null"]
 
     ForgotPasswordInput:
       type: object
@@ -1103,6 +1518,24 @@ components:
           type: string
         devResetLink:
           description: Only populated outside production, where no email provider is configured — lets the demo be clicked through without a mail server.
+          type: ["string", "null"]
+
+    VerifyParentConsentInput:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 1
+
+    VerifyParentConsentResult:
+      type: object
+      required: [verified]
+      properties:
+        verified:
+          type: boolean
+        childEmail:
+          description: The account's own email, shown as confirmation of which account this approved
           type: ["string", "null"]
 
     VerifyResetTokenInput:
@@ -1176,6 +1609,12 @@ components:
           description: One of the Plan.id values from GET /payments/plans — never a client-supplied amount
           type: string
           minLength: 1
+        cardLast4:
+          description: Optional, same simulated-decline purpose as PaymentInput.cardLast4 — omit to always simulate success.
+          type: ["string", "null"]
+          pattern: "^\\d{4}$"
+        cardBrand:
+          type: ["string", "null"]
 
     SubscribeResult:
       type: object
@@ -1206,7 +1645,7 @@ components:
 
     UploadMeta:
       type: object
-      required: [id, userId, fileName, mimeType, fileType, sizeBytes, createdAt]
+      required: [id, userId, fileName, mimeType, fileType, sizeBytes, createdAt, contentSource, trainingEligible]
       properties:
         id:
           type: number
@@ -1222,6 +1661,23 @@ components:
         sizeBytes:
           type: number
         createdAt:
+          type: string
+        contentSource:
+          description: >-
+            Declared origin of the file's content, per Team 2's Data Source
+            Acceptability Matrix. "unspecified" is the fail-closed default for
+            an upload that never declared one.
+          type: string
+          enum: [own_work, third_party_individual, published_work, social_media, incidental_third_party_ip, unspecified]
+        trainingEligible:
+          description: >-
+            Whether the matrix admits this file into a training corpus, given
+            its source and file type together. Returned so the consequence of
+            a provenance declaration is visible to the uploader rather than
+            only enforced server-side.
+          type: boolean
+        trainingExclusionReason:
+          description: Present only when trainingEligible is false; the matrix's own reasoning.
           type: string
 
     UploadContent:
@@ -1262,3 +1718,11 @@ components:
           description: Raw file bytes, base64-encoded
           type: string
           minLength: 1
+        contentSource:
+          description: >-
+            Declared origin of the content, per Team 2's Data Source
+            Acceptability Matrix. Optional: omitting it stores the upload as
+            "unspecified", which keeps the file fully usable by its owner but
+            excludes it from every training corpus until a source is declared.
+          type: string
+          enum: [own_work, third_party_individual, published_work, social_media, incidental_third_party_ip, unspecified]

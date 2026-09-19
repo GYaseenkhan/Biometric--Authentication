@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '../contexts/AuthContext';
-import { useEnrollFace, useRemoveFace, useLogoutAllDevices, useDeleteUser, getGetCurrentUserQueryKey } from '@workspace/api-client-react';
+import { useEnrollFace, useRemoveFace, useLogoutAllDevices, useDeleteUser, useLogoutUser, useSetTrainingConsent, useSetContentPersonalizationConsent, useGetContentProfile, getGetCurrentUserQueryKey, getGetContentProfileQueryKey } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, Button, Label, Input } from '../components/ui';
 import { Checkbox } from '../components/ui/checkbox';
-import { ScanFace, CheckCircle2, ChevronRight, KeyRound, Trash2, ShieldCheck, RefreshCw, Settings, LogOut, AlertTriangle, Smartphone } from 'lucide-react';
+import { ScanFace, CheckCircle2, ChevronRight, KeyRound, Trash2, ShieldCheck, RefreshCw, Settings, LogOut, AlertTriangle, Smartphone, Users as UsersIcon, BrainCircuit, Tags } from 'lucide-react';
 import { FaceCamera } from '../components/FaceCamera';
 import { enrollPasskey, listPasskeys, deletePasskey, type PasskeyInfo } from '../lib/passkey';
 import { createDeviceLinkCode } from '../lib/deviceLink';
@@ -188,9 +188,14 @@ export default function Enroll() {
   const removeFaceMutation = useRemoveFace();
   const logoutAllMutation = useLogoutAllDevices();
   const deleteAccountMutation = useDeleteUser();
+  const logoutMutation = useLogoutUser();
+  const trainingConsentMutation = useSetTrainingConsent();
+  const contentConsentMutation = useSetContentPersonalizationConsent();
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [trainingConsentError, setTrainingConsentError] = useState('');
+  const [contentConsentError, setContentConsentError] = useState('');
 
   // 'face' then 'passkey' for a not-yet-fully-enrolled account; 'settings'
   // once both are done and the page is visited to manage/re-enroll.
@@ -206,7 +211,51 @@ export default function Enroll() {
   const [error, setError] = useState('');
   const [biometricConsent, setBiometricConsent] = useState(false);
 
+  // Only fetched when consent is on and the enrollment/settings view is
+  // showing — no point calling an MFA-gated endpoint before the account can
+  // reach it, and no point building a profile the UI won't display.
+  const contentProfileQuery = useGetContentProfile({
+    query: { queryKey: getGetContentProfileQueryKey(), enabled: !!user?.contentPersonalizationConsentGiven && mode === 'settings' },
+  });
+
   if (!user) return null;
+
+  const handleLogout = async () => {
+    try {
+      await logoutMutation.mutateAsync();
+    } finally {
+      queryClient.setQueryData(getGetCurrentUserQueryKey(), null);
+      queryClient.removeQueries({ queryKey: getGetCurrentUserQueryKey() });
+      setLocation('/');
+    }
+  };
+
+  // Registered under the minor-consent age threshold, still waiting on a
+  // parent/guardian to confirm via their emailed link (see auth.ts's
+  // requireParentConsent, applied to every enrollment endpoint too — biometric
+  // enrollment is exactly the kind of new data collection the gate exists to
+  // block). Show this instead of the enrollment flow, which would otherwise
+  // let the user step through the UI only to have every submit rejected.
+  if (user.parentConsentPending) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center">
+        <Card className="w-full max-w-md">
+          <div className="space-y-4 text-center">
+            <UsersIcon className="w-8 h-8 text-primary mx-auto" />
+            <p className="font-mono text-sm text-foreground">Parental consent pending</p>
+            <p className="font-mono text-xs text-muted-foreground">
+              This account can't enroll a biometric factor or use protected features until a parent or
+              guardian confirms via the link sent at registration.
+            </p>
+            <Button variant="outline" className="w-full" onClick={handleLogout} isLoading={logoutMutation.isPending}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Log out
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   const handleCapture = (capturedDescriptor: number[]) => {
     setDescriptor(capturedDescriptor);
@@ -258,6 +307,36 @@ export default function Enroll() {
       setMode('face');
     } catch (err: any) {
       setError(err?.data?.error || 'Failed to withdraw consent / delete biometric data.');
+    }
+  };
+
+  // Separate from biometric/data consent — toggleable any time, takes effect
+  // on the very next prediction (nothing is trained ahead of time and kept
+  // around, see behaviorModel.ts).
+  const handleToggleTrainingConsent = async (consent: boolean) => {
+    setTrainingConsentError('');
+    try {
+      await trainingConsentMutation.mutateAsync({ data: { consent } });
+      await refetchUser();
+    } catch (err: any) {
+      setTrainingConsentError(err?.data?.error || 'Failed to update training consent.');
+    }
+  };
+
+  // A third, separate consent flag from both account-data consent and
+  // behavior-model training consent above — granting or withdrawing this
+  // one has no effect on either of the other two. Nothing is ever stored
+  // ahead of time: the profile shown below is recomputed fresh from your
+  // own uploaded text on every view, so withdrawing here makes it empty
+  // again immediately, not after some delay.
+  const handleToggleContentConsent = async (consent: boolean) => {
+    setContentConsentError('');
+    try {
+      await contentConsentMutation.mutateAsync({ data: { consent } });
+      await refetchUser();
+      await queryClient.invalidateQueries({ queryKey: getGetContentProfileQueryKey() });
+    } catch (err: any) {
+      setContentConsentError(err?.data?.error || 'Failed to update content-personalization consent.');
     }
   };
 
@@ -354,6 +433,94 @@ export default function Enroll() {
             <h2 className="font-mono font-bold uppercase tracking-widest text-foreground">Link Mobile Device</h2>
           </div>
           <LinkDeviceSection />
+        </Card>
+
+        <Card className="border-t-4 border-t-primary bg-card/50 backdrop-blur-sm space-y-4">
+          <div className="flex items-center gap-3">
+            <BrainCircuit className="w-5 h-5 text-primary" />
+            <h2 className="font-mono font-bold uppercase tracking-widest text-foreground">Behavior Model Training</h2>
+          </div>
+          <p className="text-sm font-mono text-muted-foreground">
+            Let your account's activity — which actions you take, never what you upload — contribute
+            to the app's "suggested next action" model. Separate from your account data consent above;
+            toggle this on or off at any time. Nothing is ever pre-trained and stored: the model is
+            rebuilt fresh on every prediction, so withdrawing takes effect immediately and completely.
+          </p>
+          <div className="flex items-center gap-3">
+            <Checkbox
+              id="trainingConsent"
+              checked={!!user.trainingConsentGiven}
+              onCheckedChange={(checked) => handleToggleTrainingConsent(checked === true)}
+              disabled={trainingConsentMutation.isPending}
+              data-testid="checkbox-training-consent"
+            />
+            <Label htmlFor="trainingConsent" className="text-xs font-mono font-normal leading-snug text-muted-foreground">
+              Allow my activity to contribute to the behavior model's training corpus
+            </Label>
+          </div>
+          {trainingConsentError && (
+            <p className="text-destructive font-mono text-xs uppercase tracking-wider">{trainingConsentError}</p>
+          )}
+        </Card>
+
+        <Card className="border-t-4 border-t-primary bg-card/50 backdrop-blur-sm space-y-4">
+          <div className="flex items-center gap-3">
+            <Tags className="w-5 h-5 text-primary" />
+            <h2 className="font-mono font-bold uppercase tracking-widest text-foreground">Content Personalization</h2>
+          </div>
+          <p className="text-sm font-mono text-muted-foreground">
+            A separate, third consent from both your account data and behavior-model training above.
+            When on, we read your own uploaded text (diaries, notes, documents) to show you what topics
+            you write about most — never shared with anyone else, and never saved: the list below is
+            rebuilt fresh from your uploads every time you view this page. Photos, videos, and voice
+            recordings are not included — those can capture other people who never agreed to anything,
+            which is a separate problem this feature doesn't attempt to solve.
+          </p>
+          <div className="flex items-center gap-3">
+            <Checkbox
+              id="contentConsent"
+              checked={!!user.contentPersonalizationConsentGiven}
+              onCheckedChange={(checked) => handleToggleContentConsent(checked === true)}
+              disabled={contentConsentMutation.isPending}
+              data-testid="checkbox-content-consent"
+            />
+            <Label htmlFor="contentConsent" className="text-xs font-mono font-normal leading-snug text-muted-foreground">
+              Read my own uploaded text to build a private personalization profile
+            </Label>
+          </div>
+          {contentConsentError && (
+            <p className="text-destructive font-mono text-xs uppercase tracking-wider">{contentConsentError}</p>
+          )}
+          {user.contentPersonalizationConsentGiven && (() => {
+            const keywords = contentProfileQuery.data?.keywords ?? [];
+            if (contentProfileQuery.isLoading) {
+              return <p className="text-xs font-mono text-muted-foreground">Building your profile…</p>;
+            }
+            if (keywords.length === 0) {
+              return (
+                <p className="text-xs font-mono text-muted-foreground">
+                  No text uploads yet — upload a text file to see your profile here.
+                </p>
+              );
+            }
+            return (
+              <>
+                <p className="text-xs font-mono text-muted-foreground mb-2" data-testid="text-content-profile-summary">
+                  From {contentProfileQuery.data?.documentsConsidered ?? 0} of your text upload(s), your most frequent topics:
+                </p>
+                <div className="flex flex-wrap gap-2" data-testid="list-content-profile-keywords">
+                  {keywords.slice(0, 10).map((k) => (
+                    <span
+                      key={k.keyword}
+                      className="px-2 py-1 rounded bg-primary/10 text-primary font-mono text-xs uppercase tracking-wider"
+                    >
+                      {k.keyword}
+                    </span>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
         </Card>
 
         <Card className="border-t-4 border-t-destructive bg-card/50 backdrop-blur-sm space-y-4">

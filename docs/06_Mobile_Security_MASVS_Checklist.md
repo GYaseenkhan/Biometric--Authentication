@@ -5,6 +5,14 @@ Team 1: Technical Security. Brief §4 (mobile client hardening) and §7 asks thi
 categories, scoped to what's actually built in `artifacts/mobile` (Expo/React Native, Android target —
 see `04_Threat_Model_Risk_Assessment.md` §0 for why no `ios/` project exists yet in this PoC).
 
+MASVS vs. MASTG, and where this document sits between them: MASVS defines *what* a mobile app should
+satisfy (the requirements below); the **OWASP Mobile Application Security Testing Guide (MASTG)** defines
+*how* to actually verify each one — concrete test procedures, tooling, and (for the newer MASVS v2
+structure) specific MASTG-Test IDs per requirement. This document does the MASTG's *job* for every row
+below — each one states what was actually checked and cites the code/config that proves it, the same
+shape as a MASTG test-case-and-evidence pair — without citing formal MASTG-Test IDs, which would be the
+next level of rigor for a production security audit rather than this PoC.
+
 Status legend: **Met** (control satisfied, code cited) · **Partial** (some coverage, gap stated) ·
 **N/A** (control doesn't apply to this app's actual design) · **Gap** (not implemented, accepted for PoC
 scope).
@@ -40,7 +48,7 @@ scope).
 | Control | Status | Detail |
 |---|---|---|
 | All traffic over TLS in production | Met (production) / N/A (local dev) | Release builds have no cleartext exception (only `src/debug/AndroidManifest.xml` sets `usesCleartextTraffic`, scoped to debug builds only, needed for the local `adb reverse` HTTP tunnel — see `artifacts/mobile/src/config.ts`) |
-| Certificate pinning | Partial | `network_security_config.xml` pins the production API domain's SPKI hash, wired into the release manifest — but the pin values are placeholders pending a real deployed domain (see `04`, R-MOBILE-2). Mechanism is real and correctly wired; the actual pin hashes are not yet the real production cert's |
+| Certificate pinning | Met, after a real failure | `network_security_config.xml` pins `d2zb1uxt99m5ks.cloudfront.net` with real SPKI hashes, wired into the release manifest (see `04`, R-MOBILE-2). **This row previously said the leaf would rotate ~2026-09-09 and "only the backup (intermediate) pin will match until the new leaf pin is recomputed." That turned out to be false.** Recomputing the live chain on 2026-09-18, while producing the first real release build, showed AWS had rotated the leaf *and* moved issuance from intermediate "Amazon RSA 2048 M01" to "M04" — so both pins were stale at once and the backup protected nothing. A release build in that window would have hard-failed every TLS handshake to the API rather than degrading. Fixed by recomputing all pins and adding a third, last-resort pin on Amazon Root CA 1 (valid to 2037): weaker, but it survives routine CA-side rotation, and pinning that gets removed after a self-inflicted outage protects nobody. A second defect surfaced in the same build, and it is the more uncomfortable one: the working copy of this config had a `BEGIN CERTIFICATE` PEM banner pasted into an XML comment as part of the documented reproduction recipe. XML forbids a double hyphen inside a comment and that banner carries five, so the file was **invalid XML** and failed at `mergeReleaseResources`. Because that only happens during a release resource compile, and no release build had ever been produced, nothing caught it — this control was recorded as "Met" while living in a file that could not compile. (The version in git is clean; this was uncommitted working-tree drift, which is its own lesson about what "it's documented" is worth.) The general lesson for this control: a pin set is only "Met" as of the last time it was *verified against the live host* and *actually compiled into a build*, never as of the last time it was reasoned about |
 | CSRF/session protection carries over from web | Met | Same double-submit CSRF cookie mechanism, read via `@react-native-cookies/cookies` instead of `document.cookie` — not a weaker mobile-specific auth model |
 | CORS/Origin allowlisting applies to mobile's declared origin | Met | `APP_ORIGIN` sent as the `Origin` header; backend's `allowedOrigins.ts` accepts local-dev origins explicitly, would need the real production app's origin added for a real deployment |
 
@@ -82,7 +90,7 @@ scope).
 | STORAGE | 4 | 0 | 0 | 0 |
 | CRYPTO | 2 | 0 | 0 | 0 |
 | AUTH | 5 | 0 | 0 | 0 |
-| NETWORK | 3 | 1 | 0 | 0 |
+| NETWORK | 4 | 0 | 0 | 0 |
 | PLATFORM | 2 | 1 | 0 | 0 |
 | CODE | 3 | 0 | 0 | 0 |
 | RESILIENCE | 0 | 0 | 3 | 0 |
@@ -90,5 +98,5 @@ scope).
 
 The RESILIENCE category is the honest weak point — anti-tampering/root-detection is the one MASVS
 category with zero coverage, consistent with this being a PoC rather than a hardened release build. Every
-other category has at least majority coverage, with the two Partial items (cert-pin values, deep-link
-origin validation) being "mechanism built, one input still placeholder/light" rather than "not attempted."
+other category now has full or majority coverage; the one remaining Partial item (deep-link origin
+validation) is "mechanism built, one input still light" rather than "not attempted."

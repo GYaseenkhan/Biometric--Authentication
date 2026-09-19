@@ -13,6 +13,56 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface SetTrainingConsentInput {
+  consent: boolean;
+}
+
+export interface SetContentPersonalizationConsentInput {
+  consent: boolean;
+}
+
+export interface KeywordScore {
+  keyword: string;
+  /** Relative frequency within this account's own text-upload corpus — not a probability, not comparable across accounts */
+  score: number;
+}
+
+export interface ContentProfileResult {
+  /** Top keywords by frequency, highest first. Empty if consent isn't given or no text uploads exist. */
+  keywords: KeywordScore[];
+  /** How many of this account's own text uploads contributed to this profile */
+  documentsConsidered: number;
+}
+
+/**
+ * Whether the prediction came from the 2-event context (2, more specific/accurate) or fell back to the single-last-event table (1). Null if suggestion is null.
+ * @nullable
+ */
+export type SuggestedActionResultContextDepth = typeof SuggestedActionResultContextDepth[keyof typeof SuggestedActionResultContextDepth] | null;
+
+
+export const SuggestedActionResultContextDepth = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+} as const;
+
+export interface SuggestedActionResult {
+  /**
+     * Predicted next event type, or null if nothing cleared the minimum-distinct-users threshold (or the account has no activity yet)
+     * @nullable
+     */
+  suggestion: string | null;
+  /** How many distinct consented users' activity supports this specific prediction — 0 if suggestion is null */
+  distinctUsersSupporting: number;
+  /** Total number of consented users the model was trained from on this call */
+  modelTrainedFromUsers: number;
+  /**
+     * Whether the prediction came from the 2-event context (2, more specific/accurate) or fell back to the single-last-event table (1). Null if suggestion is null.
+     * @nullable
+     */
+  contextDepth: SuggestedActionResultContextDepth;
+}
+
 export type UserRole = typeof UserRole[keyof typeof UserRole];
 
 
@@ -45,6 +95,12 @@ export interface User {
   dataConsentGiven: boolean;
   /** Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted */
   biometricConsentGiven: boolean;
+  /** True when this account was registered under the minor-consent age threshold and a parent/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears */
+  parentConsentPending: boolean;
+  /** Separate from dataConsentGiven — whether this account's activity may contribute to the behavior model's training corpus. Toggleable any time, unlike dataConsentGiven. */
+  trainingConsentGiven: boolean;
+  /** A third, distinct consent purpose — whether this account's own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST /users/me/content-personalization-consent. */
+  contentPersonalizationConsentGiven: boolean;
   subscriptionPlan: UserSubscriptionPlan;
   createdAt: string;
   /** @nullable */
@@ -59,6 +115,12 @@ export interface UserRegistration {
   password: string;
   /** Must be true — explicit consent to processing of account/profile data. Registration is rejected without it. */
   dataConsent: boolean;
+  /** Self-reported, ISO date (YYYY-MM-DD). Used server-side to compute age at registration — never trust a client-computed "is adult" boolean, same principle as everywhere else consent/verification is enforced in this app. */
+  dateOfBirth: string;
+  /** Required only when dateOfBirth indicates the registrant is under the minor-consent age threshold. Registration succeeds but the account is gated (parentConsentPending) until this address confirms via an emailed link. */
+  parentGuardianEmail?: string;
+  /** Optional, defaults to false if omitted. Separate from dataConsent — whether this account's activity may contribute to the behavior model's training corpus from day one. Not required to register, and freely togglable afterward via POST /users/me/training-consent regardless of what was chosen here. */
+  trainingConsent?: boolean;
 }
 
 export interface LoginCredentials {
@@ -76,11 +138,21 @@ export interface LoginResponse {
   /** @nullable */
   tempToken?: string | null;
   user: User;
+  /**
+     * Set when the login-risk model flagged this attempt (new device/IP, or a rapid IP change on this account) — surfaced once, at the point risk is known, regardless of whether a second factor is also required next. Null on every ordinary login.
+     * @nullable
+     */
+  securityNotice?: string | null;
 }
 
 export interface AuthResponse {
   user: User;
   token: string;
+  /**
+     * Only populated outside production, for a newly-registered minor account, where no email provider is configured — lets the demo be clicked through without a mail server.
+     * @nullable
+     */
+  devParentConsentLink?: string | null;
 }
 
 export interface LogoutAllResult {
@@ -208,6 +280,47 @@ export interface LogChainVerification {
   reason: string | null;
 }
 
+export interface ChainRepairResult {
+  /** False if the chain was already valid — nothing was removed */
+  repaired: boolean;
+  removedCount: number;
+  /** @nullable */
+  removedFromId: number | null;
+  /** Re-verification result after the repair (or the original check, if nothing needed repairing) */
+  verification: LogChainVerification;
+}
+
+export interface ChainRestoreResult {
+  restored: boolean;
+  restoredCount: number;
+  restoredIds: number[];
+  /** Ids confirmed missing but with no deletion-audit snapshot to restore from */
+  unrecoverableIds: number[];
+  /** Re-verification result after restoring (or the original check, if nothing needed restoring) */
+  verification: LogChainVerification;
+}
+
+export interface DeletionAuditEntry {
+  id: number;
+  /** The security_logs id that was deleted */
+  deletedLogId: number;
+  /** @nullable */
+  eventType: string | null;
+  /** @nullable */
+  details: string | null;
+  /**
+     * Set only for app-initiated deletions (e.g. repairLogChain) — null means raw/out-of-band, such as a direct SQL client
+     * @nullable
+     */
+  deletedByAppActor: string | null;
+  deletedByDbRole: string;
+  /** @nullable */
+  deletedByClientAddr: string | null;
+  deletedAt: string;
+  /** Whether a row now sits at this id again (e.g. restored via restoreLogChain) */
+  currentlyRestored: boolean;
+}
+
 export type PaymentStatus = typeof PaymentStatus[keyof typeof PaymentStatus];
 
 
@@ -231,20 +344,56 @@ export interface Payment {
   currency: string;
   status: PaymentStatus;
   description: string;
+  /**
+     * Set only when status is "failed" — see lib/paymentSimulation.ts. Null otherwise.
+     * @nullable
+     */
+  declineCode?: string | null;
+  /**
+     * A user-facing explanation of the decline. Null unless status is "failed".
+     * @nullable
+     */
+  declineMessage?: string | null;
   providerToken: string;
   createdAt: string;
 }
 
+/**
+ * Restricted to the currencies this app actually prices plans in, not just "any 3 letters" — a real ISO-4217 registry check is out of scope for a demo, but "looks like a real currency" is not.
+ */
+export type PaymentInputCurrency = typeof PaymentInputCurrency[keyof typeof PaymentInputCurrency];
+
+
+export const PaymentInputCurrency = {
+  USD: 'USD',
+  EUR: 'EUR',
+  GBP: 'GBP',
+  AUD: 'AUD',
+  CAD: 'CAD',
+} as const;
+
 export interface PaymentInput {
-  /** @minimum 0.01 */
-  amount: number;
   /**
-     * @minLength 3
-     * @maxLength 3
+     * No real payment processor is behind this demo endpoint, so there's no upstream cap enforcing a sane ceiling the way a real processor would — this one is Team 1's own, not a business decision to defer.
+     * @minimum 0.01
+     * @maximum 999999.99
      */
-  currency: string;
+  amount: number;
+  /** Restricted to the currencies this app actually prices plans in, not just "any 3 letters" — a real ISO-4217 registry check is out of scope for a demo, but "looks like a real currency" is not. */
+  currency: PaymentInputCurrency;
   /** @minLength 1 */
   description: string;
+  /**
+     * Optional. The last 4 digits only — never the full card number, expiry, or CVV, which never leave the browser (see cardValidation.ts). Used purely to drive the simulated processor's decline logic (lib/paymentSimulation.ts) against Stripe's own published test-card numbers; omitting it always simulates success.
+     * @nullable
+     * @pattern ^\d{4}$
+     */
+  cardLast4?: string | null;
+  /**
+     * Optional, display-only — e.g. "Visa", "Mastercard". Not itself sensitive (a standard, publicly documented numbering scheme).
+     * @nullable
+     */
+  cardBrand?: string | null;
 }
 
 export interface ForgotPasswordInput {
@@ -258,6 +407,20 @@ export interface ForgotPasswordResult {
      * @nullable
      */
   devResetLink?: string | null;
+}
+
+export interface VerifyParentConsentInput {
+  /** @minLength 1 */
+  token: string;
+}
+
+export interface VerifyParentConsentResult {
+  verified: boolean;
+  /**
+     * The account's own email, shown as confirmation of which account this approved
+     * @nullable
+     */
+  childEmail?: string | null;
 }
 
 export interface VerifyResetTokenInput {
@@ -309,6 +472,14 @@ export interface SubscribeInput {
      * @minLength 1
      */
   planId: string;
+  /**
+     * Optional, same simulated-decline purpose as PaymentInput.cardLast4 — omit to always simulate success.
+     * @nullable
+     * @pattern ^\d{4}$
+     */
+  cardLast4?: string | null;
+  /** @nullable */
+  cardBrand?: string | null;
 }
 
 export type SubscribeResultSubscriptionPlan = typeof SubscribeResultSubscriptionPlan[keyof typeof SubscribeResultSubscriptionPlan];
@@ -354,6 +525,21 @@ export const UploadMetaFileType = {
   audio: 'audio',
 } as const;
 
+/**
+ * Declared origin of the file's content, per Team 2's Data Source Acceptability Matrix. "unspecified" is the fail-closed default for an upload that never declared one.
+ */
+export type UploadMetaContentSource = typeof UploadMetaContentSource[keyof typeof UploadMetaContentSource];
+
+
+export const UploadMetaContentSource = {
+  own_work: 'own_work',
+  third_party_individual: 'third_party_individual',
+  published_work: 'published_work',
+  social_media: 'social_media',
+  incidental_third_party_ip: 'incidental_third_party_ip',
+  unspecified: 'unspecified',
+} as const;
+
 export interface UploadMeta {
   id: number;
   userId: number;
@@ -362,6 +548,12 @@ export interface UploadMeta {
   fileType: UploadMetaFileType;
   sizeBytes: number;
   createdAt: string;
+  /** Declared origin of the file's content, per Team 2's Data Source Acceptability Matrix. "unspecified" is the fail-closed default for an upload that never declared one. */
+  contentSource: UploadMetaContentSource;
+  /** Whether the matrix admits this file into a training corpus, given its source and file type together. Returned so the consequence of a provenance declaration is visible to the uploader rather than only enforced server-side. */
+  trainingEligible: boolean;
+  /** Present only when trainingEligible is false; the matrix's own reasoning. */
+  trainingExclusionReason?: string;
 }
 
 export type UploadContentFileType = typeof UploadContentFileType[keyof typeof UploadContentFileType];
@@ -386,6 +578,21 @@ export interface UploadContent {
   dataBase64: string;
 }
 
+/**
+ * Declared origin of the content, per Team 2's Data Source Acceptability Matrix. Optional: omitting it stores the upload as "unspecified", which keeps the file fully usable by its owner but excludes it from every training corpus until a source is declared.
+ */
+export type UploadInputContentSource = typeof UploadInputContentSource[keyof typeof UploadInputContentSource];
+
+
+export const UploadInputContentSource = {
+  own_work: 'own_work',
+  third_party_individual: 'third_party_individual',
+  published_work: 'published_work',
+  social_media: 'social_media',
+  incidental_third_party_ip: 'incidental_third_party_ip',
+  unspecified: 'unspecified',
+} as const;
+
 export interface UploadInput {
   /**
      * @minLength 1
@@ -399,6 +606,8 @@ export interface UploadInput {
      * @minLength 1
      */
   dataBase64: string;
+  /** Declared origin of the content, per Team 2's Data Source Acceptability Matrix. Optional: omitting it stores the upload as "unspecified", which keeps the file fully usable by its owner but excludes it from every training corpus until a source is declared. */
+  contentSource?: UploadInputContentSource;
 }
 
 export type ListSecurityLogsParams = {

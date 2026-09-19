@@ -313,7 +313,7 @@ Adding `DEV_TUNNEL_DOMAIN` support to `allowedOrigins.ts` briefly broke the *web
 original code only added the `localhost` fallback when `origins.size === 0`, so setting a tunnel domain
 disabled the localhost fallback entirely (`Error: Origin not allowed`, caught via the live server's error
 log). Fixed by making the tunnel domain additive alongside the localhost fallback rather than exclusive
-with it — see `isReplitDeployment` in `allowedOrigins.ts`.
+with it — see `isProductionDeployment` in `allowedOrigins.ts`.
 
 ### If you want to attempt a real WebAuthn passkey ceremony anyway (historical — mobile no longer does this)
 

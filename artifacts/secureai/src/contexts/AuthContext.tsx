@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   //   (either face or passkey satisfies MFA — see requireMfaEnrolled.ts)
   useEffect(() => {
     if (!isLoading) {
-      const isPublicRoute = location === '/' || location === '/register' || location === '/forgot-password' || location === '/reset-password';
+      const isPublicRoute = location === '/' || location === '/register' || location === '/forgot-password' || location === '/reset-password' || location === '/parent-consent';
       const isEnrollRoute = location === '/enroll';
       const mfaComplete = !!user && (user.faceEnrolled || user.passkeyEnrolled);
 

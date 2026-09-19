@@ -11,7 +11,10 @@ def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 react {
     entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
     reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
-    hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
+    // hermesCommand intentionally left unset (default ""): the gradle plugin's own fallback
+    // resolves hermesc via a path relative to the project root (File.cliPath), which survives
+    // "cmd /c" invocation on Windows. An explicit absolute path here breaks under cmd.exe's
+    // argument parsing whenever the project root contains a space (e.g. "RMIT UNI").
     codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
 
     // Use Expo CLI to bundle the app, this ensures the Metro config
@@ -57,6 +60,13 @@ react {
     //
     //   The list of flags to pass to the Hermes compiler. By default is "-O", "-output-source-map"
     // hermesFlags = ["-O", "-output-source-map"]
+    //   "-output-source-map" is dropped here: its compose-source-maps.js merge step invokes
+    //   node via "cmd /c" with the project's absolute path as an argument, and cmd.exe
+    //   mis-parses that path because it contains a space ("RMIT UNI") -- a known Windows
+    //   limitation of the RN gradle plugin, not something fixable from this file. No
+    //   crash-reporting/symbolication service consumes release source maps here, so
+    //   skipping generation just avoids the broken step with no functional loss.
+    hermesFlags = ["-O"]
 
     /* Autolinking */
     autolinkLibrariesWithApp()

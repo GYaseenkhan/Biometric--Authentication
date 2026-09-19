@@ -61,6 +61,26 @@ function triggerDownload(dataBase64: string, mimeType: string, fileName: string)
   URL.revokeObjectURL(url);
 }
 
+// Mirrors the server enum in api-server/src/lib/dataProvenance.ts, which is
+// itself Team 2's acceptability matrix. Labels are written from the
+// uploader's point of view ("someone else's work") rather than in the
+// matrix's own vocabulary ("third-party content"), since the person picking
+// one has not read that document.
+type ContentSource =
+  | 'own_work'
+  | 'third_party_individual'
+  | 'published_work'
+  | 'social_media'
+  | 'incidental_third_party_ip';
+
+const CONTENT_SOURCE_OPTIONS: Array<{ value: ContentSource; label: string }> = [
+  { value: 'own_work', label: 'My own work' },
+  { value: 'third_party_individual', label: "Someone else's work" },
+  { value: 'published_work', label: 'Published book / article / news' },
+  { value: 'social_media', label: 'From social media' },
+  { value: 'incidental_third_party_ip', label: "Mine, but contains someone else's IP" },
+];
+
 interface PreviewState {
   meta: UploadMeta;
   objectUrl: string | null;
@@ -74,6 +94,15 @@ export default function Uploads() {
   const deleteMutation = useDeleteUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Declared provenance for the NEXT upload, per Team 2's acceptability
+  // matrix. Pre-set to own_work because that is the overwhelmingly common
+  // case and this is a factual claim about the file, not a consent grant —
+  // training additionally requires the separate content-personalization
+  // consent, and the resulting eligibility is shown back per row below, so
+  // the consequence of the choice is visible rather than buried. The server
+  // still defaults to "unspecified" when the field is absent entirely; that
+  // fail-closed path covers API callers and every pre-existing row.
+  const [contentSource, setContentSource] = useState<ContentSource>('own_work');
   const [error, setError] = useState('');
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [previewingId, setPreviewingId] = useState<number | null>(null);
@@ -97,6 +126,7 @@ export default function Uploads() {
           fileName: file.name,
           mimeType: file.type || 'text/plain',
           dataBase64,
+          contentSource,
         },
       });
       queryClient.invalidateQueries({ queryKey: getListUploadsQueryKey() });
@@ -171,9 +201,29 @@ export default function Uploads() {
           onChange={handleFileSelect}
           data-testid="input-file-upload"
         />
-        <Button onClick={() => fileInputRef.current?.click()} isLoading={createMutation.isPending} data-testid="button-upload">
-          <UploadIcon className="w-4 h-4 mr-2" /> Upload File
-        </Button>
+        <div className="flex items-end gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+              Where is this from?
+            </span>
+            <select
+              id="upload-content-source"
+              value={contentSource}
+              onChange={(e) => setContentSource(e.target.value as ContentSource)}
+              className="bg-card border border-border text-xs font-mono px-2 py-2 text-foreground"
+              data-testid="select-content-source"
+            >
+              {CONTENT_SOURCE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button onClick={() => fileInputRef.current?.click()} isLoading={createMutation.isPending} data-testid="button-upload">
+            <UploadIcon className="w-4 h-4 mr-2" /> Upload File
+          </Button>
+        </div>
       </div>
 
       {error && <p className="text-destructive font-mono text-xs uppercase tracking-wider">{error}</p>}

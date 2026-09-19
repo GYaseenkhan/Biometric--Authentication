@@ -7,17 +7,15 @@ import { Shield, LayoutDashboard, Users, Activity, AlertTriangle, CreditCard, Lo
 import { cn } from '../lib/utils';
 
 // `roles` restricts a nav item to specific roles; omitted means everyone.
-// "Users" (account management) is admin and it_support — it_support gets
-// the same page but the delete/role-change controls stay admin-only inside
-// it (see pages/Users.tsx). "Audit Logs" is security_analyst-only,
-// deliberately NOT admin too — separation of duties: the role with
-// account-management authority shouldn't also control visibility into the
-// audit trail of its own actions. Admin/security_analyst are disjoint on
-// purpose; it_support is not — it's a narrower slice of admin, not a peer.
+// Admin is a superset role — it has every other role's rights, including
+// "Audit Logs" (see security.ts's canSeeAuditLogs). "Users" (account
+// management) is admin and it_support — it_support gets the same page but
+// the delete/role-change controls stay admin-only inside it (see
+// pages/Users.tsx).
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/users', label: 'Users', icon: Users, roles: ['admin', 'it_support'] },
-  { href: '/security-logs', label: 'Audit Logs', icon: Activity, roles: ['security_analyst'] },
+  { href: '/security-logs', label: 'Audit Logs', icon: Activity, roles: ['security_analyst', 'admin'] },
   { href: '/threats', label: 'Threat Intel', icon: AlertTriangle },
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/uploads', label: 'Data Vault', icon: Lock },

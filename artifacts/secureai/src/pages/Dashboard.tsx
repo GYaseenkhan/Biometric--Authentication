@@ -1,10 +1,43 @@
 import React from 'react';
-import { useGetSecurityDashboard } from '@workspace/api-client-react';
+import { useGetSecurityDashboard, useGetSuggestedAction } from '@workspace/api-client-react';
 import { Card, Badge } from '../components/ui';
-import { Users, Fingerprint, Activity, AlertTriangle, Loader2, Shield } from 'lucide-react';
+import { Users, Fingerprint, Activity, AlertTriangle, Loader2, Shield, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLocation } from 'wouter';
 import { useAuth } from '../contexts/AuthContext';
+
+// Live behavior model's own widget — see api-server/src/lib/behaviorModel.ts.
+// Degrades quietly (no error banner) on 403/429/no-data: this is a nice-to-have
+// hint, not something worth interrupting the dashboard over if MFA/parent-consent
+// gating blocks it or the model has too little consented data yet.
+function SuggestedActionCard() {
+  const { data, isLoading, error } = useGetSuggestedAction();
+
+  return (
+    <Card className="bg-primary/5 border-primary/20 p-6 space-y-3">
+      <div className="flex items-center gap-3">
+        <Sparkles className="w-5 h-5 text-primary" />
+        <h3 className="font-mono text-sm uppercase tracking-widest text-foreground">Suggested Next Action</h3>
+      </div>
+      {isLoading ? (
+        <p className="font-mono text-xs text-muted-foreground">Loading…</p>
+      ) : error || !data?.suggestion ? (
+        <p className="font-mono text-xs text-muted-foreground">
+          Not enough shared, opted-in activity yet to suggest anything — this needs a pattern
+          independently seen from 3 or more consenting operators before it will surface.
+        </p>
+      ) : (
+        <>
+          <p className="font-mono text-lg text-primary uppercase tracking-wider">{data.suggestion.replace(/_/g, ' ')}</p>
+          <p className="font-mono text-[10px] text-muted-foreground/70 uppercase tracking-wider">
+            Seen from {data.distinctUsersSupporting} operators with similar activity · model built from {data.modelTrainedFromUsers} consenting accounts
+            {data.contextDepth != null && ` · based on your last ${data.contextDepth === 2 ? '2 actions' : 'action'}`}
+          </p>
+        </>
+      )}
+    </Card>
+  );
+}
 
 export default function Dashboard() {
   const { data: dashboard, isLoading, error } = useGetSecurityDashboard();
@@ -29,10 +62,9 @@ export default function Dashboard() {
 
   const isAdmin = user?.role === 'admin';
   const canManageUsers = isAdmin || user?.role === 'it_support';
-  // Audit log visibility is security_analyst-only, deliberately NOT admin
-  // too — separation of duties (see security.ts's canSeeAuditLogs). Admin
-  // manages accounts; security_analyst audits activity; neither role does both.
-  const canMonitor = user?.role === 'security_analyst';
+  // Admin is a superset role — it has every other role's rights, including
+  // audit-log visibility (see security.ts's canSeeAuditLogs).
+  const canMonitor = user?.role === 'security_analyst' || isAdmin;
   const operatorsCardHref = canManageUsers ? '/users' : canMonitor ? '/security-logs' : '/dashboard';
   const operatorsCardAction = canManageUsers ? 'Open user registry' : canMonitor ? 'View audit trail' : 'Aggregate count only';
   const statCards = [
@@ -168,7 +200,7 @@ export default function Dashboard() {
             ))}
             {dashboard.recentLogs.length === 0 && (
               <p className="text-muted-foreground font-mono text-sm">
-                {canMonitor ? 'No recent logs.' : 'Audit trail requires security analyst access.'}
+                {canMonitor ? 'No recent logs.' : 'Audit trail requires security analyst or admin access.'}
               </p>
             )}
           </div>
@@ -191,6 +223,7 @@ export default function Dashboard() {
               </>
             )}
           </Card>
+          <SuggestedActionCard />
         </div>
       </div>
     </div>

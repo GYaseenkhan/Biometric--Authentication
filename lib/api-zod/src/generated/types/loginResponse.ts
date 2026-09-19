@@ -17,4 +17,9 @@ export interface LoginResponse {
   /** @nullable */
   tempToken?: string | null;
   user: User;
+  /**
+     * Set when the login-risk model flagged this attempt (new device/IP, or a rapid IP change on this account) — surfaced once, at the point risk is known, regardless of whether a second factor is also required next. Null on every ordinary login.
+     * @nullable
+     */
+  securityNotice?: string | null;
 }

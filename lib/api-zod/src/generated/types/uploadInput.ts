@@ -5,6 +5,7 @@
  * SecureAI - Biometric Security Demo API
  * OpenAPI spec version: 0.1.0
  */
+import type { UploadInputContentSource } from './uploadInputContentSource';
 
 export interface UploadInput {
   /**
@@ -19,4 +20,6 @@ export interface UploadInput {
      * @minLength 1
      */
   dataBase64: string;
+  /** Declared origin of the content, per Team 2's Data Source Acceptability Matrix. Optional: omitting it stores the upload as "unspecified", which keeps the file fully usable by its owner but excludes it from every training corpus until a source is declared. */
+  contentSource?: UploadInputContentSource;
 }

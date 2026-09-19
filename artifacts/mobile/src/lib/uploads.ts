@@ -3,6 +3,25 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { request } from './api';
 
+// Mirrors the server enum in api-server/src/lib/dataProvenance.ts, which is
+// Team 2's acceptability matrix turned into rules. Labels are written from
+// the uploader's point of view, not in the matrix's own vocabulary — the
+// person picking one hasn't read that document.
+export type ContentSource =
+  | 'own_work'
+  | 'third_party_individual'
+  | 'published_work'
+  | 'social_media'
+  | 'incidental_third_party_ip';
+
+export const CONTENT_SOURCE_OPTIONS: Array<{ value: ContentSource; label: string }> = [
+  { value: 'own_work', label: 'My own work' },
+  { value: 'third_party_individual', label: "Someone else's work" },
+  { value: 'published_work', label: 'Published book / article / news' },
+  { value: 'social_media', label: 'From social media' },
+  { value: 'incidental_third_party_ip', label: "Mine, but contains someone else's IP" },
+];
+
 export interface UploadMeta {
   id: number;
   userId: number;
@@ -11,6 +30,9 @@ export interface UploadMeta {
   fileType: 'image' | 'video' | 'text' | 'audio';
   sizeBytes: number;
   createdAt: string;
+  contentSource: ContentSource | 'unspecified';
+  trainingEligible: boolean;
+  trainingExclusionReason?: string;
 }
 
 export interface UploadContent extends UploadMeta {
@@ -74,7 +96,7 @@ export async function deleteUpload(id: number): Promise<void> {
 // Opens the OS document picker, reads the picked file as base64 (RN has no
 // FileReader/Blob the way a browser does — expo-file-system is the
 // equivalent primitive), and uploads it. Returns null if the user cancelled.
-export async function pickAndUploadFile(): Promise<UploadMeta | null> {
+export async function pickAndUploadFile(contentSource: ContentSource): Promise<UploadMeta | null> {
   const result = await DocumentPicker.getDocumentAsync({
     type: ['image/*', 'video/*', 'audio/*', 'text/plain'],
     copyToCacheDirectory: true,
@@ -89,7 +111,12 @@ export async function pickAndUploadFile(): Promise<UploadMeta | null> {
   const dataBase64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
   return request('/uploads', {
     method: 'POST',
-    body: { fileName: asset.name, mimeType: asset.mimeType ?? 'application/octet-stream', dataBase64 },
+    body: {
+      fileName: asset.name,
+      mimeType: asset.mimeType ?? 'application/octet-stream',
+      dataBase64,
+      contentSource,
+    },
   });
 }
 

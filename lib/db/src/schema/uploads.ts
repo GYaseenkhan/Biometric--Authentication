@@ -15,6 +15,17 @@ export const uploadsTable = pgTable("uploads", {
   ciphertext: text("ciphertext").notNull(),
   iv: text("iv").notNull(),
   authTag: text("auth_tag").notNull(),
+  // Where this file's content came from, per Team 2's Data Source
+  // Acceptability Matrix (docs/09). Defaults to "unspecified", which is NOT
+  // a matrix row and is NOT trainable — an upload that never declared an
+  // origin (including every row predating this column) is excluded from
+  // training rather than assumed to be the uploader's own work. The rules
+  // that read this live in api-server/src/lib/dataProvenance.ts.
+  contentSource: text("content_source", {
+    enum: ["own_work", "third_party_individual", "published_work", "social_media", "incidental_third_party_ip", "unspecified"],
+  })
+    .notNull()
+    .default("unspecified"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

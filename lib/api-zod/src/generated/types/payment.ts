@@ -20,6 +20,16 @@ export interface Payment {
   currency: string;
   status: PaymentStatus;
   description: string;
+  /**
+     * Set only when status is "failed" — see lib/paymentSimulation.ts. Null otherwise.
+     * @nullable
+     */
+  declineCode?: string | null;
+  /**
+     * A user-facing explanation of the decline. Null unless status is "failed".
+     * @nullable
+     */
+  declineMessage?: string | null;
   providerToken: string;
   createdAt: string;
 }

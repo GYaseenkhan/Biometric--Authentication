@@ -1,6 +1,19 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import { listPayments, listPlans, createPayment, subscribe, type Payment, type Plan } from '../lib/api';
+import { listPayments, listPlans, createPayment, subscribe, newIdempotencyKey, type Payment, type Plan } from '../lib/api';
+import {
+  EMPTY_CARD,
+  formatCardNumber,
+  formatExpiry,
+  getCardBrand,
+  getLast4,
+  isCardFormValid,
+  isCvvValidForBrand,
+  isExpiryValid,
+  isPanLengthValidForBrand,
+  luhnCheck,
+  type CardDetails,
+} from '../lib/cardValidation';
 import { useAuth } from '../context/AuthContext';
 import { Card, Button, Badge, Input, Label, Centered } from '../components/ui';
 import { colors, fonts } from '../theme';
@@ -27,6 +40,33 @@ export function PaymentsScreen() {
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Card details live in component state only, and only long enough to
+  // validate and derive brand + last 4. The full number, expiry and CVV are
+  // never sent, never logged and never persisted — matching the web client,
+  // and the reason this demo stays out of most PCI scope.
+  const [card, setCard] = useState<CardDetails>(EMPTY_CARD);
+
+  const brand = getCardBrand(card.number);
+  const cardValid = isCardFormValid(card);
+
+  // Per-field messages rather than one "invalid card" — a mismatched CVV
+  // length on Amex is a different mistake from a failed checksum, and the
+  // person typing needs to know which.
+  const cardIssue = (): string => {
+    if (!card.number && !card.expiry && !card.cvv) return '';
+    if (card.number && !luhnCheck(card.number)) return 'Card number fails its checksum.';
+    if (card.number && !isPanLengthValidForBrand(card.number, brand)) {
+      return `${brand} numbers aren't ${card.number.replace(/\D/g, '').length} digits long.`;
+    }
+    if (card.expiry && !isExpiryValid(card.expiry)) return 'Expiry is in the past or malformed.';
+    if (card.cvv && !isCvvValidForBrand(card.cvv, brand)) {
+      return brand === 'Amex'
+        ? 'Amex uses a 4-digit CID on the front of the card.'
+        : `${brand} uses a 3-digit security code.`;
+    }
+    return '';
+  };
+
   const refresh = useCallback(() => {
     setLoading(true);
     setError('');
@@ -39,10 +79,20 @@ export function PaymentsScreen() {
   useEffect(() => { refresh(); }, [refresh]);
 
   const handleSubscribe = async (plan: Plan) => {
+    if (!cardValid) {
+      setError('Enter valid card details below before subscribing.');
+      return;
+    }
     setSubscribingId(plan.id);
+    setError('');
     try {
-      await subscribe(plan.id);
+      // One key per attempt. Generated here rather than in the API helper so
+      // that a retry of THIS attempt reuses it, which is the whole point —
+      // a key minted inside the request would be new every time and would
+      // provide no duplicate-charge protection at all.
+      await subscribe(plan.id, { last4: getLast4(card.number), brand }, newIdempotencyKey());
       await refetchUser();
+      setCard(EMPTY_CARD);
       refresh();
     } catch (err: any) {
       setError(err?.message || 'Subscription failed.');
@@ -54,12 +104,23 @@ export function PaymentsScreen() {
   const handleCreatePayment = async () => {
     const numericAmount = parseFloat(amount);
     if (!numericAmount || numericAmount <= 0 || !description.trim()) return;
+    if (!cardValid) {
+      setError('Enter valid card details before executing a transaction.');
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
-      await createPayment(numericAmount, currency, description.trim());
+      await createPayment(
+        numericAmount,
+        currency,
+        description.trim(),
+        { last4: getLast4(card.number), brand },
+        newIdempotencyKey(),
+      );
       setAmount('');
       setDescription('');
+      setCard(EMPTY_CARD);
       refresh();
     } catch (err: any) {
       setError(err?.message || 'Transaction failed.');
@@ -99,6 +160,50 @@ export function PaymentsScreen() {
           </Card>
         );
       })}
+
+      <Text style={styles.sectionTitle}>Card Details</Text>
+      <Card style={styles.formCard}>
+        <Text style={styles.cardNote}>
+          Test cards only. The number, expiry and security code never leave this device — only the brand and
+          last 4 digits are sent, which is what a real processor returns for a receipt.
+        </Text>
+        <View style={styles.cardLabelRow}>
+          <Label>Card number</Label>
+          {card.number.replace(/\D/g, '').length >= 4 && <Badge tone="outline">{brand}</Badge>}
+        </View>
+        <Input
+          value={card.number}
+          onChangeText={(t) => setCard((c) => ({ ...c, number: formatCardNumber(t) }))}
+          keyboardType="number-pad"
+          placeholder="4242 4242 4242 4242"
+          maxLength={23}
+        />
+        <View style={styles.cardRow}>
+          <View style={{ flex: 1 }}>
+            <Label style={{ marginTop: 12 }}>Expiry</Label>
+            <Input
+              value={card.expiry}
+              onChangeText={(t) => setCard((c) => ({ ...c, expiry: formatExpiry(t) }))}
+              keyboardType="number-pad"
+              placeholder="MM/YY"
+              maxLength={5}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Label style={{ marginTop: 12 }}>{brand === 'Amex' ? 'CID' : 'CVV'}</Label>
+            <Input
+              value={card.cvv}
+              onChangeText={(t) => setCard((c) => ({ ...c, cvv: t.replace(/\D/g, '').slice(0, 4) }))}
+              keyboardType="number-pad"
+              placeholder={brand === 'Amex' ? '4 digits' : '3 digits'}
+              maxLength={4}
+              secureTextEntry
+            />
+          </View>
+        </View>
+        {cardIssue() ? <Text style={styles.errorText}>{cardIssue()}</Text> : null}
+        {cardValid ? <Text style={styles.okText}>Card looks valid for {brand}.</Text> : null}
+      </Card>
 
       <Text style={styles.sectionTitle}>Simulate Transaction</Text>
       <Card style={styles.formCard}>
@@ -164,6 +269,10 @@ const styles = StyleSheet.create({
   planPrice: { fontFamily: fonts.mono, color: colors.primary, fontSize: 15, fontWeight: '700' },
   feature: { fontFamily: fonts.mono, color: colors.mutedForeground, fontSize: 11, marginBottom: 3 },
   formCard: { marginBottom: 20 },
+  cardNote: { fontFamily: fonts.mono, color: colors.mutedForeground, fontSize: 10, lineHeight: 15, marginBottom: 12 },
+  cardLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  cardRow: { flexDirection: 'row', gap: 10 },
+  okText: { fontFamily: fonts.mono, color: colors.primary, fontSize: 11, marginTop: 10 },
   currencyRow: { flexDirection: 'row', gap: 6 },
   paymentCard: { marginBottom: 10 },
   paymentTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },

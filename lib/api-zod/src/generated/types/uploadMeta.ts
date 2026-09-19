@@ -5,6 +5,7 @@
  * SecureAI - Biometric Security Demo API
  * OpenAPI spec version: 0.1.0
  */
+import type { UploadMetaContentSource } from './uploadMetaContentSource';
 import type { UploadMetaFileType } from './uploadMetaFileType';
 
 export interface UploadMeta {
@@ -15,4 +16,10 @@ export interface UploadMeta {
   fileType: UploadMetaFileType;
   sizeBytes: number;
   createdAt: string;
+  /** Declared origin of the file's content, per Team 2's Data Source Acceptability Matrix. "unspecified" is the fail-closed default for an upload that never declared one. */
+  contentSource: UploadMetaContentSource;
+  /** Whether the matrix admits this file into a training corpus, given its source and file type together. Returned so the consequence of a provenance declaration is visible to the uploader rather than only enforced server-side. */
+  trainingEligible: boolean;
+  /** Present only when trainingEligible is false; the matrix's own reasoning. */
+  trainingExclusionReason?: string;
 }

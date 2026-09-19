@@ -6,35 +6,70 @@
   src/debug/AndroidManifest.xml's usesCleartextTraffic override, needed for
   the adb-reverse tunnel described in src/config.ts.
 
-  HOW TO REPLACE THE PLACEHOLDER PINS ONCE A REAL PRODUCTION DOMAIN EXISTS:
-    1. Replace "secureai-api.example.com" below with the real deployed domain.
-    2. Compute the SPKI pin of its live certificate:
-         openssl s_client -connect secureai-api.example.com:443 -servername secureai-api.example.com </dev/null 2>/dev/null \
-           | openssl x509 -pubkey -noout \
-           | openssl pkey -pubin -outform der \
-           | openssl dgst -sha256 -binary \
-           | openssl enc -base64
-    3. ALWAYS include a second, independent backup pin (a different cert —
-       e.g. the CA's intermediate, or a second leaf cert from a planned
-       rotation) so a routine cert renewal doesn't hard-lock the app out of
-       its own API. A pin-set with only one pin is a self-inflicted denial
-       of service the moment that certificate is renewed or revoked.
-    4. Placeholder values below are syntactically valid base64 SHA-256
-       digests but do NOT correspond to any real certificate — they exist so
-       this file is a complete, correctly-wired example, not a template with
-       missing pieces. Traffic to the real domain will fail to validate
-       until they're replaced with real pins from step 2.
+  Pins are REAL, recomputed against the live deployment on 2026-09-18. To
+  reproduce, fetch the chain and split it per certificate:
+    openssl s_client -connect d2zb1uxt99m5ks.cloudfront.net:443 \
+      -servername d2zb1uxt99m5ks.cloudfront.net -showcerts </dev/null \
+      2>/dev/null > chain.pem
+    csplit -z -f cert- -b "%02d.pem" chain.pem '/BEGIN CERT/' '{*}'
+  then hash each one's public key:
+    openssl x509 -pubkey -noout -in certNN.pem | openssl pkey -pubin -outform der \
+      | openssl dgst -sha256 -binary | openssl enc -base64
+
+  Keep any PEM banner text out of this comment. XML forbids a double hyphen
+  inside a comment, and a pasted "BEGIN CERTIFICATE" banner carries five of
+  them — which makes this file invalid XML. That is not a hypothetical: it is
+  exactly what broke the first release build of this app, and it fails at
+  resource-compile time, so nothing catches it until someone actually builds
+  a release. Hence the abbreviated 'BEGIN CERT' pattern above.
+
+  WHAT HAPPENED ON 2026-09-18, AND WHY THE PIN SET CHANGED SHAPE
+
+  The previous version of this file predicted the leaf would rotate around
+  2026-09-09 and stated that the backup pin — the issuing intermediate,
+  "Amazon RSA 2048 M01" — "should survive that rotation since AWS controls
+  the whole issuance chain for this cert type," and that this was "what keeps
+  the app working through the rotation instead of hard-locking out."
+
+  That reasoning was wrong, and checking rather than trusting it is the only
+  reason we know. The leaf did rotate, and AWS also moved issuance to a
+  DIFFERENT intermediate: Amazon RSA 2048 M04, not M01. So BOTH pins were
+  stale simultaneously. A release build shipped between the rotation and this
+  fix would have been unable to reach the API at all — not degraded, not
+  falling back to system trust, but hard-failing every TLS handshake. That is
+  the classic certificate-pinning failure mode, and this project walked into
+  it exactly as documented-but-unverified assumptions tend to.
+
+  The lesson is in the pin set below. A CA operator rotating intermediates is
+  routine and outside our control, so pinning only leaf + intermediate is
+  fragile by construction. Amazon Root CA 1 is added as a third, last-resort
+  pin: it is a materially weaker guarantee (any certificate issued anywhere
+  under that root would satisfy it) but it expires in 2037 and survives both
+  leaf and intermediate rotation. Pinning is worthless if it is switched off
+  after the first self-inflicted outage, so the trade is deliberate — a
+  slightly weaker pin that stays enabled beats a stronger one that gets
+  removed in a panic.
+
+  Re-verify before the pin-set expiration below. Verify by recomputing
+  against the live host, never by assuming a rotation kept the chain intact.
 -->
 <network-security-config>
     <domain-config>
-        <domain includeSubdomains="true">secureai-api.example.com</domain>
-        <pin-set expiration="2027-01-01">
-            <!-- Primary pin — the current production leaf certificate's SPKI hash. Placeholder. -->
-            <pin digest="SHA-256">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</pin>
-            <!-- Backup pin — a second, independent certificate (e.g. next rotation's cert
-                 or the issuing CA's intermediate). Required so a routine renewal doesn't
-                 lock the app out. Placeholder. -->
-            <pin digest="SHA-256">BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=</pin>
+        <domain includeSubdomains="true">d2zb1uxt99m5ks.cloudfront.net</domain>
+        <pin-set expiration="2027-03-01">
+            <!-- Primary — leaf certificate (CN=*.cloudfront.net), valid until
+                 2027-03-10. Rotates without notice; expect to replace this. -->
+            <pin digest="SHA-256">dExBlAvT1n9yGuq8/3TYV0mGSoCBmqDo+95Hxr2avEE=</pin>
+            <!-- Backup — issuing intermediate (Amazon RSA 2048 M04), valid
+                 until 2030-08-23. Note this is M04: the previous pin named
+                 M01, and AWS switched intermediates during the September 2026
+                 rotation. Treat this pin as mutable, not stable. -->
+            <pin digest="SHA-256">G9LNNAql897egYsabashkzUCTEJkWBzgoEtk8X/678c=</pin>
+            <!-- Last resort — Amazon Root CA 1, valid until 2037-12-31. Added
+                 2026-09-18 after both pins above went stale at once. Weaker
+                 (it trusts the whole root), but it is what prevents a routine
+                 CA-side rotation from bricking the installed app. -->
+            <pin digest="SHA-256">++MBgDH5WGvL9Bcn5Be30cRcL0f5O+NyoXuWtQdX1aI=</pin>
         </pin-set>
     </domain-config>
 

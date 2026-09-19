@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { Card, Label, Input, Button, SectionNote, ShieldBadge } from '../components/ui';
 import { colors, fonts } from '../theme';
 
-type View = 'password' | 'biometric' | 'link';
+type LoginStep = 'password' | 'biometric' | 'link';
 
 export function LoginScreen({ onSwitchToRegister }: { onSwitchToRegister: () => void }) {
   const { refetchUser } = useAuth();
@@ -21,7 +21,7 @@ export function LoginScreen({ onSwitchToRegister }: { onSwitchToRegister: () => 
   // separate cross-device bootstrap for an account that has no biometric key
   // on THIS device yet (e.g. enrolled via web) — see src/lib/biometricKey.ts's
   // linkDeviceWithCode() for why that path exists.
-  const [view, setView] = useState<View>('password');
+  const [view, setView] = useState<LoginStep>('password');
 
   const handlePasswordSubmit = async () => {
     setError('');
