@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
-import { db, usersTable, passkeysTable, passwordResetTokensTable } from "@workspace/db";
+import { eq, count } from "drizzle-orm";
+import { db, usersTable, passkeysTable, passwordResetTokensTable, uploadsTable, biometricKeysTable } from "@workspace/db";
 import {
   GetUserParams,
   GetUserResponse,
@@ -24,15 +24,16 @@ import {
 } from "@workspace/api-zod";
 import { logEvent } from "../lib/auditLog";
 import { requireMfaEnrolled } from "../middlewares/requireMfaEnrolled";
+import { requireParentConsent } from "../middlewares/requireParentConsent";
 import { encryptJson } from "../lib/fileEncryption";
 import { hashResetToken, RESET_TOKEN_TTL_MS } from "./auth";
+import { devAuthLinksEnabled } from "../lib/devLinks";
 
 const router: IRouter = Router();
 
 type Role = "user" | "admin" | "security_analyst" | "it_support";
 
-// it_support can view/help-recover users but not change roles, delete
-// accounts, or see the audit log — those stay admin/security_analyst-only.
+// it_support can view/help-recover users but not change roles, delete accounts, or see the audit log — those stay admin/security_analyst-only.
 function canManageUsers(role: Role | undefined): boolean {
   return role === "admin" || role === "it_support";
 }
@@ -57,14 +58,16 @@ async function mapUser(user: typeof usersTable.$inferSelect) {
     passkeyEnrolled: passkeys.length > 0,
     dataConsentGiven: user.dataConsentGiven,
     biometricConsentGiven: user.biometricConsentGiven,
+    parentConsentPending: user.parentGuardianEmail !== null && !user.parentConsentGiven,
+    trainingConsentGiven: user.trainingConsentGiven,
+    contentPersonalizationConsentGiven: user.contentPersonalizationConsentGiven,
     subscriptionPlan: user.subscriptionPlan,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt?.toISOString() ?? null,
   };
 }
 
-// GET /users
-router.get("/users", requireMfaEnrolled, async (req, res): Promise<void> => {
+router.get("/users", requireParentConsent, requireMfaEnrolled, async (req, res): Promise<void> => {
   const sessionUserId = requireAuth(req, res);
   if (!sessionUserId) return;
 
@@ -78,8 +81,7 @@ router.get("/users", requireMfaEnrolled, async (req, res): Promise<void> => {
   res.json(ListUsersResponse.parse(await Promise.all(users.map(mapUser))));
 });
 
-// GET /users/:id
-router.get("/users/:id", requireMfaEnrolled, async (req, res): Promise<void> => {
+router.get("/users/:id", requireParentConsent, requireMfaEnrolled, async (req, res): Promise<void> => {
   const sessionUserId = requireAuth(req, res);
   if (!sessionUserId) return;
 
@@ -106,8 +108,7 @@ router.get("/users/:id", requireMfaEnrolled, async (req, res): Promise<void> => 
   res.json(GetUserResponse.parse(await mapUser(user)));
 });
 
-// PATCH /users/:id
-router.patch("/users/:id", requireMfaEnrolled, async (req, res): Promise<void> => {
+router.patch("/users/:id", requireParentConsent, requireMfaEnrolled, async (req, res): Promise<void> => {
   const sessionUserId = requireAuth(req, res);
   if (!sessionUserId) return;
 
@@ -121,7 +122,6 @@ router.patch("/users/:id", requireMfaEnrolled, async (req, res): Promise<void> =
   const [sessionUser] = await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, sessionUserId));
   const isAdmin = sessionUser?.role === "admin";
 
-  // Only admins can change roles
   const body = UpdateUserBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: body.error.message });
@@ -153,12 +153,8 @@ router.patch("/users/:id", requireMfaEnrolled, async (req, res): Promise<void> =
   res.json(UpdateUserResponse.parse(await mapUser(user)));
 });
 
-// DELETE /users/:id — self-service or admin removal. Uploads and passkeys
-// cascade-delete; payments keep userId set to null (records outlive the
-// account); security_logs keep userId as originally written — not a live
-// FK, since mutating a hash-chained row after the fact breaks its hash
-// (see docs/04_Threat_Model_Risk_Assessment.md, R-LOG-3).
-router.delete("/users/:id", requireMfaEnrolled, async (req, res): Promise<void> => {
+// Uploads and passkeys cascade-delete; payments keep userId null (records outlive the account); security_logs keep userId as originally written — not a live FK, since mutating a hash-chained row after the fact breaks its hash (docs/04_Threat_Model_Risk_Assessment.md, R-LOG-3).
+router.delete("/users/:id", requireParentConsent, requireMfaEnrolled, async (req, res): Promise<void> => {
   const sessionUserId = requireAuth(req, res);
   if (!sessionUserId) return;
 
@@ -176,9 +172,7 @@ router.delete("/users/:id", requireMfaEnrolled, async (req, res): Promise<void> 
     return;
   }
 
-  // Self-deletion requires re-entering the password — a session cookie
-  // alone shouldn't be enough to destroy the account. Not required when an
-  // admin deletes someone else's account, since it's not their password.
+  // A session cookie alone shouldn't be enough to destroy the account; not required when an admin deletes someone else's account, since it's not their password.
   if (isSelf) {
     const body = DeleteUserBody.safeParse(req.body ?? {});
     const password = body.success ? body.data.password : undefined;
@@ -189,15 +183,23 @@ router.delete("/users/:id", requireMfaEnrolled, async (req, res): Promise<void> 
     }
   }
 
+  // Captured before the delete since cascade-deleted rows are otherwise uncountable afterward. None of this is sensitive content — just the shape of what's being removed, so the audit trail records what was lost, not just that something was.
+  const [[{ uploadCount }], [{ passkeyCount }], [{ biometricKeyCount }]] = await Promise.all([
+    db.select({ uploadCount: count() }).from(uploadsTable).where(eq(uploadsTable.userId, params.data.id)),
+    db.select({ passkeyCount: count() }).from(passkeysTable).where(eq(passkeysTable.userId, params.data.id)),
+    db.select({ biometricKeyCount: count() }).from(biometricKeysTable).where(eq(biometricKeysTable.userId, params.data.id)),
+  ]);
+
   const [user] = await db.delete(usersTable).where(eq(usersTable.id, params.data.id)).returning();
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
 
+  const deletedSummary = `role=${user.role}, faceEnrolled=${user.faceEnrolled}, subscriptionPlan=${user.subscriptionPlan}, uploads=${uploadCount}, passkeys=${passkeyCount}, biometricKeys=${biometricKeyCount}`;
   await logEvent({
     eventType: "USER_DELETED",
-    details: isSelf ? `User ${user.email} deleted their own account` : `User ${user.email} deleted by admin ${sessionUserId}`,
+    details: `${isSelf ? `User ${user.email} deleted their own account` : `User ${user.email} deleted by admin ${sessionUserId}`} — cascade-removed: ${deletedSummary}`,
     userId: sessionUserId,
   });
 
@@ -208,8 +210,7 @@ router.delete("/users/:id", requireMfaEnrolled, async (req, res): Promise<void> 
   res.sendStatus(204);
 });
 
-// POST /users/:id/enroll-face
-router.post("/users/:id/enroll-face", async (req, res): Promise<void> => {
+router.post("/users/:id/enroll-face", requireParentConsent, async (req, res): Promise<void> => {
   const sessionUserId = requireAuth(req, res);
   if (!sessionUserId) return;
 
@@ -220,7 +221,6 @@ router.post("/users/:id/enroll-face", async (req, res): Promise<void> => {
     return;
   }
 
-  // Can only enroll own face
   if (sessionUserId !== params.data.id) {
     res.status(403).json({ error: "You can only enroll your own face" });
     return;
@@ -263,7 +263,6 @@ router.post("/users/:id/enroll-face", async (req, res): Promise<void> => {
   res.json(EnrollFaceResponse.parse(await mapUser(user)));
 });
 
-// DELETE /users/:id/face
 router.delete("/users/:id/face", async (req, res): Promise<void> => {
   const sessionUserId = requireAuth(req, res);
   if (!sessionUserId) return;
@@ -281,8 +280,7 @@ router.delete("/users/:id/face", async (req, res): Promise<void> => {
     return;
   }
 
-  // Withdrawing consent deletes the data immediately — no "consent
-  // withdrawn but data retained" state.
+  // Withdrawing consent deletes the data immediately — no "consent withdrawn but data retained" state.
   const [user] = await db.update(usersTable).set({
     faceDescriptorCiphertext: null,
     faceDescriptorIv: null,
@@ -301,10 +299,7 @@ router.delete("/users/:id/face", async (req, res): Promise<void> => {
   res.json(RemoveFaceResponse.parse(await mapUser(user)));
 });
 
-// POST /users/:id/reset-mfa — admin/it_support only. Clears both the face
-// descriptor and every enrolled passkey in one call, routing the user back
-// through /enroll on next login.
-router.post("/users/:id/reset-mfa", requireMfaEnrolled, async (req, res): Promise<void> => {
+router.post("/users/:id/reset-mfa", requireParentConsent, requireMfaEnrolled, async (req, res): Promise<void> => {
   const sessionUserId = requireAuth(req, res);
   if (!sessionUserId) return;
 
@@ -346,9 +341,8 @@ router.post("/users/:id/reset-mfa", requireMfaEnrolled, async (req, res): Promis
   res.json(ResetUserMfaResponse.parse(await mapUser(user)));
 });
 
-// POST /users/:id/reset-password — admin/it_support only. Same token
-// mechanism as /auth/forgot-password, triggered by staff instead of self.
-router.post("/users/:id/reset-password", requireMfaEnrolled, async (req, res): Promise<void> => {
+// Same token mechanism as /auth/forgot-password, triggered by staff instead of self.
+router.post("/users/:id/reset-password", requireParentConsent, requireMfaEnrolled, async (req, res): Promise<void> => {
   const sessionUserId = requireAuth(req, res);
   if (!sessionUserId) return;
 
@@ -385,10 +379,8 @@ router.post("/users/:id/reset-password", requireMfaEnrolled, async (req, res): P
     userEmail: user.email,
   });
 
-  // Same demo constraint as self-service forgot-password: no email provider
-  // configured, so the link is handed back directly outside production
-  // instead of being silently unreachable.
-  const devResetLink = process.env["NODE_ENV"] !== "production" ? `/reset-password?token=${rawToken}` : null;
+  // No email provider configured — handed back directly in local development only, instead of being silently unreachable (see lib/devLinks.ts).
+  const devResetLink = devAuthLinksEnabled() ? `/reset-password?token=${rawToken}` : null;
 
   res.json(StaffResetPasswordResponse.parse({
     message: `Password reset link issued for ${user.email}.`,
