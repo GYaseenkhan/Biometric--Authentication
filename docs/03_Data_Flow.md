@@ -1,142 +1,58 @@
-\# 03 - Data Flow
+# 03 - Data Flow
 
-
-
-\## AI/ML Security PoC Pipeline
-
-
+## AI/ML Security PoC Pipeline
 
 The AI/ML proof-of-concept trains on synthetic data only.
 
-
-
 Pipeline:
 
-
-
 Source Data
-
-&#x20;   ↓
-
+    ↓
 Consent Gate
-
-&#x20;   ↓
-
+    ↓
+Per-User Contribution Cap
+    ↓
 Training Corpus
-
-&#x20;   ↓
-
-Deduplication and Anti-Poisoning Controls
-
-&#x20;   ↓
-
+    ↓
 Model Training
-
-&#x20;   ↓
-
+    ↓
+Sentence Deduplication
+    ↓
 Text Generation
-
-&#x20;   ↓
-
+    ↓
 Extraction Resistance Testing
-
-&#x20;   ↓
-
+    ↓
 Deletion and Retraining Verification
 
-
-
-\## Consent Enforcement
-
-
+## Consent Enforcement
 
 Every training record contains:
 
+- user_id
+- consent_id
+- source_id
 
+The consent gate blocks records without a consent record before they can enter training.
 
-\- user\_id
-
-\- consent\_id
-
-\- source\_id
-
-
-
-The consent gate blocks records without valid consent before they can enter training.
-
-
-
-\## Data Deletion
-
-
+## Data Deletion
 
 Users can be removed from the corpus using the deletion workflow.
 
 The model is retrained on the reduced dataset after deletion.
 
-
-
-\## Memorisation and Leakage Defence
-
-
+## Memorisation and Leakage Defence
 
 The PoC uses sentence-level deduplication to reduce memorisation risk.
 
-
-
 A canary secret is intentionally planted in training data:
 
+- Vulnerable model: canary is extractable
+- Hardened model: canary is not extractable
 
+## Model Extraction Protection
 
-\- Vulnerable model: canary is extractable
+The AI/ML PoC itself is a local Python script and does not expose a dedicated inference API.
 
-\- Hardened model: canary is not extractable
+The wider application already applies requestRateLimit(...) and audit logging to AI-related endpoints, including behavioural-model and content-profile routes.
 
-
-
-\## Model Extraction Protection
-
-
-
-The current PoC does not expose a public inference API.
-
-
-
-If an inference API is added in future, model-theft and extraction risks should be mitigated through:
-
-
-
-\- Request rate limiting
-
-\- Query monitoring
-
-\- Detection of repeated extraction-style prompts
-
-\- Audit logging of suspicious activity
-
-\- Security alerting for abnormal usage patterns
-
-\### Model Theft / Extraction Protection
-
-
-
-The current AI/ML proof-of-concept does not expose a public inference API.
-
-
-
-As a result, large-scale automated model extraction is not currently applicable to this PoC.
-
-
-
-If an inference API is introduced in a future version:
-
-
-
-\- Request rate limiting should be applied using the existing `middlewares/requestRateLimit.ts` pattern already used elsewhere in the application.
-
-\- Query activity should be monitored for extraction-style behaviour.
-
-\- Repeated prompt variations and unusually high query volumes should be logged as suspicious activity.
-
-\- Security monitoring should review extraction-style query patterns and investigate anomalies.
-
+If a dedicated inference API is introduced in the future, the same rate-limiting and audit-monitoring patterns should be reused to reduce model-extraction risk.

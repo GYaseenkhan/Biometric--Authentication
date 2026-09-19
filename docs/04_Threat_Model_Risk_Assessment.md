@@ -173,44 +173,13 @@ records the outcome.
 | Threat (STRIDE) | Scenario | Control | Status |
 |---|---|---|---|
 | Tampering | Data poisoning — attacker injects corrupted/mislabeled data into a training set | PoC: per-user contribution cap (`MAX_DOCS_PER_USER = 3`) enforced in `consent_gate()`, so no single contributor can dominate the corpus. Live app's closest analog: upload-time provenance/validation (magic-byte format detection, malware scan) — see `03_Data_Flow.md` point 2 | PoC implemented but **not exercised by the demo run** — the synthetic corpus generator never gives any user more than 2 records, so the cap of 3 never actually triggers in the sample output. Honest gap, not silently claimed as proven (R-ML-3) |
-| Information disclosure | Model memorisation/leakage — a trained model regurgitates private training data, discoverable via membership-inference / extraction-style attacks | PoC: sentence-level exact-duplicate deduplication before training, tested with a real extraction attempt (prompt `"my private"` against a planted canary secret, duplicated across 5 users) | PoC mitigated, verified by actually running it: undefended model leaks the canary verbatim; deduplicated model does not, while a genuine repeated pattern (not the canary) still generates correctly afterward — proving the fix removes verbatim copying without breaking real learning (R-ML-1) |
+| Information disclosure | Model memorisation/leakage — a trained model regurgitates private training data, discoverable via membership-inference / extraction-style attacks | PoC: sentence-level exact-duplicate deduplication before training, tested using multiple extraction-style prompts ("my private", "private reference", and "reference is") against a planted canary secret. | PoC mitigated, verified by actually running it: undefended model leaks the canary verbatim; deduplicated model does not, while a genuine repeated pattern (not the canary) still generates correctly afterward — proving the fix removes verbatim copying without breaking real learning (R-ML-1) |
 | Denial of service / Elevation of privilege | Model theft/extraction via repeated inference-API queries | Neither the live app nor the PoC serves a queryable inference endpoint — the PoC is a local script, not a hosted API | Not applicable / not built — if this were ever wired behind a real endpoint, `middlewares/requestRateLimit.ts` (already used for uploads/payments) is the ready-made pattern to rate-limit it (R-ML-4) |
 | Tampering | Model weights swapped for a malicious version in transit/at source | face-api.js model source pinned to a specific upstream commit hash | Done (R-SUPPLY-1) |
 | Spoofing | Prompt-injection / unsafe generative output (STRETCH) | The PoC model is technically generative (greedy word-continuation) but not instruction-following — it has no system prompt or tool access to inject against, so "prompt injection" in the OWASP-LLM sense doesn't apply to it. No chat/LLM interface exists anywhere in the live app | Not applicable (R-ML-2) |
 | Elevation of privilege / Tampering | Non-consented data reaches training | PoC: `consent_gate()` rejects any record without a `consent_id` before training ever sees it — demonstrated live with a planted non-consented record that is correctly blocked | Done, verified by running it (R-ML-5, new) |
 | Tampering | Deleting a user's data doesn't actually remove it from a model that already learned from it | PoC: `delete_user()` removes the user's records from the corpus and the model is retrained from the reduced set — demonstrated live (10 → 8 records after deleting one user, retrain completes near-instantly) | Partial by design, and stated honestly rather than oversold: retraining removes the data going forward, but what an *already-deployed* model previously learned can't be surgically un-learned — the brief explicitly scopes this as "design an approach and state its limitations," not "solve machine unlearning" (R-ML-6, new) |
 | Spoofing | Adversarial input crafted against face-api.js's real inference (STRETCH) | See "Biometric MFA specifically" above (R-ADV-1) | Gap — accepted, documented (R-ADV-1) |
-
-### AI Model Extraction
-
-Risk:
-An attacker may repeatedly query an inference API to reconstruct training data or model behaviour.
-
-Controls:
-- Request rate limiting
-- Query monitoring
-- Audit logging
-- Detection of repeated extraction-style prompts
-
-Current Status:
-The AI/ML PoC does not expose a public inference API; therefore extraction testing is demonstrated through controlled prompt-based evaluation of the hardened model.
-
-### AI Model Extraction Threat
-
-Risk:
-An attacker may attempt to reconstruct training data or model behaviour through repeated prompts.
-
-Threat:
-Model extraction and training-data leakage.
-
-Controls:
-- Query monitoring
-- Rate limiting
-- Audit logging
-- Detection of repeated extraction-style prompts
-
-Current Status:
-The AI/ML PoC does not expose a public inference API. Extraction resistance is demonstrated through controlled testing of the hardened model using multiple prompt variants.
 
 ### Access control
 
@@ -340,7 +309,7 @@ Likelihood/Impact: Low/Medium/High. Rating = combined severity.
 | R-PAY-6 | Chargeback used instead of refund — user disputes the charge with their card issuer while keeping paid-tier access, since no chargeback/dispute webhook handler revokes access | N/A (no real payment processor connected, so no real dispute webhook can fire) | Medium | Low | Accepted analysis-only gap — the signed-webhook mechanism this would extend already exists and is proven (`lib/webhookSignature.ts`); adding a `charge.dispute.created`-style handler is the recommended, low-effort extension for a real deployment |
 | R-SUPPLY-1 | face-api.js model weights loaded from an unpinned, moving branch — a compromised upstream repo could swap in malicious weights | Low | Medium | Low | Mitigated — pinned to a specific commit hash |
 | R-CONSENT-1 | Biometric data captured/retained without explicit, revocable consent | Low | High | Medium | Mitigated — consent required at enrollment, tied 1:1 to data retention (withdrawal deletes the data) |
-| R-ML-1 | Model memorisation/leakage of training data | Medium (duplication is a realistic real-world data pattern, not a contrived edge case) | High (PII regurgitated verbatim to any user who guesses the right prompt) | High | Mitigated in the standalone PoC (`artifacts/ai-model/model_starter.py`) — sentence-level deduplication verified, by actually running both variants, to block a planted canary secret's extraction while leaving genuine repeated patterns intact. Not wired into the live app (which trains no model) |
+| R-ML-1 | Model memorisation/leakage of training data | Medium (duplication is a realistic real-world data pattern, not a contrived edge case) | High (PII regurgitated verbatim to any user who guesses the right prompt) | High | Mitigated in the standalone PoC (`artifacts/ai-model/model_starter.py`). Additional validation was performed using multiple extraction-style prompts ("my private", "private reference", and "reference is"). The vulnerable model leaked the planted canary while the hardened model blocked extraction, confirming that sentence-level deduplication prevents canary disclosure while preserving genuine repeated-pattern generation. Not wired into the live app (which trains no model) |
 | R-ML-2 | Prompt-injection / unsafe generative output (STRETCH) | N/A | N/A | N/A | Not applicable — the PoC model has no instruction-following or tool access to inject against; no generative-model/LLM chat integration exists anywhere in the codebase. See `03_Data_Flow.md` point 6 for what the equivalent controls would be if a future model were instruction-following |
 | R-ML-3 | Data poisoning — attacker deliberately corrupts or mislabels training data to manipulate the resulting model | Low (requires controlling many accounts) | Medium | Low | Partially mitigated in the PoC — a per-user contribution cap (`MAX_DOCS_PER_USER`) is implemented in `consent_gate()`, but the demo's own synthetic corpus never gives any single user enough records to actually trigger it, so the cap is implemented, not proven, by the current run. Live app's closest analog (upload-time provenance/validation) documented in `03_Data_Flow.md` point 2 |
 | R-ML-4 | Model-serving API abuse (unrestricted inference requests, model extraction) | N/A | N/A | N/A | Not applicable — no model-serving endpoint exists to abuse anywhere in this project, including the standalone PoC (it's a local script, not a hosted API). If one existed, `middlewares/requestRateLimit.ts` is a directly reusable pattern. See `03_Data_Flow.md` point 5 |
