@@ -181,6 +181,20 @@ records the outcome.
 | Tampering | Deleting a user's data doesn't actually remove it from a model that already learned from it | PoC: `delete_user()` removes the user's records from the corpus and the model is retrained from the reduced set — demonstrated live (10 → 8 records after deleting one user, retrain completes near-instantly) | Partial by design, and stated honestly rather than oversold: retraining removes the data going forward, but what an *already-deployed* model previously learned can't be surgically un-learned — the brief explicitly scopes this as "design an approach and state its limitations," not "solve machine unlearning" (R-ML-6, new) |
 | Spoofing | Adversarial input crafted against face-api.js's real inference (STRETCH) | See "Biometric MFA specifically" above (R-ADV-1) | Gap — accepted, documented (R-ADV-1) |
 
+### AI Model Extraction
+
+Risk:
+An attacker may repeatedly query an inference API to reconstruct training data or model behaviour.
+
+Controls:
+- Request rate limiting
+- Query monitoring
+- Audit logging
+- Detection of repeated extraction-style prompts
+
+Current Status:
+The AI/ML PoC does not expose a public inference API; therefore extraction testing is demonstrated through controlled prompt-based evaluation of the hardened model.
+
 ### Access control
 
 | Threat (STRIDE) | Scenario | Control | Status |
