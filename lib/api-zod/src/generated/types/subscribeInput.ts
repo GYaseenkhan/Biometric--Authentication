@@ -12,4 +12,12 @@ export interface SubscribeInput {
      * @minLength 1
      */
   planId: string;
+  /**
+     * Optional, same simulated-decline purpose as PaymentInput.cardLast4 — omit to always simulate success.
+     * @nullable
+     * @pattern ^\d{4}$
+     */
+  cardLast4?: string | null;
+  /** @nullable */
+  cardBrand?: string | null;
 }

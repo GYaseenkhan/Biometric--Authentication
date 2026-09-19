@@ -1,8 +1,3 @@
-/**
- * Euclidean distance between two face descriptor vectors.
- * face-api.js uses 128-element float32 arrays.
- * Threshold < 0.6 = same person (face-api.js default).
- */
 export function euclideanDistance(a: number[], b: number[]): number {
   if (a.length !== b.length) return Infinity;
   let sum = 0;
@@ -12,8 +7,15 @@ export function euclideanDistance(a: number[], b: number[]): number {
   return Math.sqrt(sum);
 }
 
-export const FACE_MATCH_THRESHOLD = 0.6;
+export const FACE_MATCH_THRESHOLD = 0.6; // face-api.js default for "same person"
 
 export function isFaceMatch(a: number[], b: number[]): boolean {
   return euclideanDistance(a, b) < FACE_MATCH_THRESHOLD;
+}
+
+/** Same comparison as isFaceMatch, but returns the actual distance instead
+ *  of collapsing it to a boolean — needed to distinguish an ordinary
+ *  mismatch from a distance clustered just above threshold. */
+export function faceMatchDistance(a: number[], b: number[]): number {
+  return euclideanDistance(a, b);
 }

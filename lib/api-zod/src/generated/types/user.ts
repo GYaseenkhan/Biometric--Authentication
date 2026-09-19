@@ -20,6 +20,12 @@ export interface User {
   dataConsentGiven: boolean;
   /** Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted */
   biometricConsentGiven: boolean;
+  /** True when this account was registered under the minor-consent age threshold and a parent/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears */
+  parentConsentPending: boolean;
+  /** Separate from dataConsentGiven — whether this account's activity may contribute to the behavior model's training corpus. Toggleable any time, unlike dataConsentGiven. */
+  trainingConsentGiven: boolean;
+  /** A third, distinct consent purpose — whether this account's own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST /users/me/content-personalization-consent. */
+  contentPersonalizationConsentGiven: boolean;
   subscriptionPlan: UserSubscriptionPlan;
   createdAt: string;
   /** @nullable */

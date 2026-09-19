@@ -1,3 +1,10 @@
+// No @types/node in this package (deliberately minimal RN deps — see
+// pnpm-workspace.yaml's note on why mobile has its own independent
+// install), so `process.env` needs a local ambient type. This doesn't
+// affect runtime — Expo/Metro's EXPO_PUBLIC_ inlining happens at bundle
+// time regardless of what TypeScript sees here.
+declare const process: { env: Record<string, string | undefined> };
+
 // Uses `adb reverse tcp:8080 tcp:8080` over the USB cable rather than a LAN
 // IP — deliberately, after hitting real campus-network client isolation
 // (dev machine on "RMIT-University" WiFi, phone on "RMIT-Guest" — two
@@ -10,10 +17,21 @@
 //
 // Android emulator: use 'http://10.0.2.2:8080/api' instead (special
 // loopback alias to the host machine, no adb reverse needed there).
-export const API_BASE_URL = 'http://localhost:8080/api';
+//
+// EXPO_PUBLIC_API_BASE_URL is inlined at build time (Expo's convention for
+// client-exposed env vars — anything prefixed EXPO_PUBLIC_ gets baked into
+// the JS bundle, same mechanism as Vite's VITE_ prefix). Set it when
+// building a release APK against a live deployed backend, e.g.:
+//   EXPO_PUBLIC_API_BASE_URL=https://secureai-api.onrender.com/api eas build ...
+// Falls back to the local-dev adb-reverse tunnel when unset.
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8080/api';
 
-// Sent as the Origin header on every request — the backend's CORS check
-// (ALLOWED_ORIGINS / isAllowedOrigin in allowedOrigins.ts) accepts any
-// http://localhost:<port> origin in local dev, so this arbitrary-but-
-// consistent value works without further backend configuration.
-export const APP_ORIGIN = 'http://localhost:8081';
+// Sent as the Origin header on every request — must be on the backend's
+// FRONTEND_ORIGINS/ALLOWED_ORIGINS allowlist (see allowedOrigins.ts) for
+// CORS and the WebAuthn relying-party check to accept it. In local dev, any
+// http://localhost:<port> origin is accepted automatically; for a release
+// build this needs to be a real, allowlisted value — there's no "the app"
+// origin for a native client the way a browser has one, so this is
+// necessarily an arbitrary-but-consistent placeholder the backend is
+// configured to trust specifically for the mobile app.
+export const APP_ORIGIN = process.env.EXPO_PUBLIC_APP_ORIGIN ?? 'http://localhost:8081';

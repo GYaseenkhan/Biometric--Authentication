@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request } from "express";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import { z } from "zod/v4";
 import { db, usersTable, passkeysTable, passwordResetTokensTable } from "@workspace/db";
 import {
   generateRegistrationOptions,
@@ -14,15 +15,21 @@ import { logEvent } from "../lib/auditLog";
 import { MFA_CHALLENGE_TTL_MS, loadUsableResetToken } from "./auth";
 import { ALLOWED_ORIGINS, isAllowedOrigin } from "../lib/allowedOrigins";
 import { requestRateLimit } from "../middlewares/requestRateLimit";
+import { requireParentConsent } from "../middlewares/requireParentConsent";
 import { ABSOLUTE_SESSION_MAX_MS } from "../lib/sessionPolicy";
+
+// verifyRegistrationResponse/verifyAuthenticationResponse below do the real cryptographic verification of the WebAuthn response — Zod here only types the surrounding fields (bounded deviceName, primitive checks) before that call, so it doesn't duplicate or risk being stricter than the crypto check.
+const WebAuthnResponseShape = z.looseObject({ id: z.string().min(1) });
+const RegisterVerifyBody = z.object({ response: z.looseObject({}), deviceName: z.string().trim().min(1).max(100).optional() });
+const LoginVerifyBody = z.object({ response: WebAuthnResponseShape });
+const ResetPasskeyOptionsBody = z.object({ token: z.string().min(1) });
+const ResetPasskeyVerifyBody = z.object({ response: WebAuthnResponseShape, newPassword: z.string().min(8) });
 
 const router: IRouter = Router();
 
 const RP_NAME = "SecureAI";
 
-// Registering a passkey involves real WebAuthn attestation verification —
-// throttle it per account so it can't be turned into a spam vector for
-// creating unbounded passkey rows.
+// Registering a passkey involves real WebAuthn attestation verification — throttle it per account so it can't be turned into a spam vector for unbounded passkey rows.
 const passkeyRegisterRateLimit = requestRateLimit("passkey-register", 15, 5 * 60 * 1000);
 
 function getClientIp(req: Request): string {
@@ -31,9 +38,7 @@ function getClientIp(req: Request): string {
   return req.socket?.remoteAddress ?? "unknown";
 }
 
-/** Resolve the RP ID + expected origin by validating the request Origin
- *  against the shared allowlist (same one CORS enforces). Returns null for
- *  unrecognized origins. */
+// Validates against the same origin allowlist CORS enforces.
 function getRp(req: Request): { rpID: string; origin: string } | null {
   const requestOrigin = req.headers.origin;
   if (typeof requestOrigin !== "string" || !isAllowedOrigin(requestOrigin)) return null;
@@ -58,8 +63,7 @@ function destroySession(req: Request): Promise<void> {
   });
 }
 
-/** Enforce the same pending-MFA TTL as face verification. Returns true if the
- *  pending challenge is still valid; otherwise invalidates the session. */
+// Same pending-MFA TTL as face verification (auth.ts).
 async function pendingMfaValid(req: Request, res: import("express").Response): Promise<boolean> {
   if (!req.session.mfaIssuedAt || Date.now() - req.session.mfaIssuedAt > MFA_CHALLENGE_TTL_MS) {
     try {
@@ -97,18 +101,17 @@ async function mapUser(user: typeof usersTable.$inferSelect) {
     passkeyEnrolled: passkeys.length > 0,
     dataConsentGiven: user.dataConsentGiven,
     biometricConsentGiven: user.biometricConsentGiven,
+    parentConsentPending: user.parentGuardianEmail !== null && !user.parentConsentGiven,
+    trainingConsentGiven: user.trainingConsentGiven,
+    contentPersonalizationConsentGiven: user.contentPersonalizationConsentGiven,
     subscriptionPlan: user.subscriptionPlan,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt?.toISOString() ?? null,
   };
 }
 
-// ---------------------------------------------------------------------------
-// Enrollment (requires a fully authenticated session)
-// ---------------------------------------------------------------------------
-
-// POST /auth/passkey/register-options
-router.post("/auth/passkey/register-options", async (req, res): Promise<void> => {
+// Enrollment routes below require a fully authenticated session.
+router.post("/auth/passkey/register-options", requireParentConsent, async (req, res): Promise<void> => {
   const userId = req.session.userId;
   if (!userId) {
     res.status(401).json({ error: "Not authenticated" });
@@ -148,8 +151,7 @@ router.post("/auth/passkey/register-options", async (req, res): Promise<void> =>
   res.json(options);
 });
 
-// POST /auth/passkey/register-verify
-router.post("/auth/passkey/register-verify", passkeyRegisterRateLimit, async (req, res): Promise<void> => {
+router.post("/auth/passkey/register-verify", requireParentConsent, passkeyRegisterRateLimit, async (req, res): Promise<void> => {
   const userId = req.session.userId;
   const expectedChallenge = req.session.webauthnChallenge;
   if (!userId || !expectedChallenge) {
@@ -161,16 +163,17 @@ router.post("/auth/passkey/register-verify", passkeyRegisterRateLimit, async (re
   const rp = requireRp(req, res);
   if (!rp) return;
   const { rpID, origin } = rp;
-  const body = req.body as { response?: RegistrationResponseJSON; deviceName?: string };
-  if (!body?.response) {
+  const parsedBody = RegisterVerifyBody.safeParse(req.body);
+  if (!parsedBody.success) {
     res.status(400).json({ error: "Missing WebAuthn response" });
     return;
   }
+  const body = parsedBody.data;
 
   let verification;
   try {
     verification = await verifyRegistrationResponse({
-      response: body.response,
+      response: body.response as unknown as RegistrationResponseJSON,
       expectedChallenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
@@ -212,7 +215,6 @@ router.post("/auth/passkey/register-verify", passkeyRegisterRateLimit, async (re
   res.status(201).json({ verified: true });
 });
 
-// GET /auth/passkey/list — the current user's enrolled passkeys
 router.get("/auth/passkey/list", async (req, res): Promise<void> => {
   const userId = req.session.userId;
   if (!userId) {
@@ -230,7 +232,6 @@ router.get("/auth/passkey/list", async (req, res): Promise<void> => {
   );
 });
 
-// DELETE /auth/passkey/:id — remove one of the current user's passkeys
 router.delete("/auth/passkey/:id", async (req, res): Promise<void> => {
   const userId = req.session.userId;
   if (!userId) {
@@ -262,11 +263,7 @@ router.delete("/auth/passkey/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
-// ---------------------------------------------------------------------------
-// Login second factor (requires the pending-MFA session from password login)
-// ---------------------------------------------------------------------------
-
-// POST /auth/passkey/login-options
+// Login second-factor routes below require the pending-MFA session from password login.
 router.post("/auth/passkey/login-options", async (req, res): Promise<void> => {
   const pendingUserId = req.session.pendingUserId;
   if (!pendingUserId) {
@@ -299,7 +296,6 @@ router.post("/auth/passkey/login-options", async (req, res): Promise<void> => {
   res.json(options);
 });
 
-// POST /auth/passkey/login-verify
 router.post("/auth/passkey/login-verify", async (req, res): Promise<void> => {
   const pendingUserId = req.session.pendingUserId;
   const expectedChallenge = req.session.webauthnChallenge;
@@ -311,11 +307,12 @@ router.post("/auth/passkey/login-verify", async (req, res): Promise<void> => {
   if (!(await pendingMfaValid(req, res))) return;
   delete req.session.webauthnChallenge;
 
-  const body = req.body as { response?: AuthenticationResponseJSON };
-  if (!body?.response) {
+  const parsedBody = LoginVerifyBody.safeParse(req.body);
+  if (!parsedBody.success) {
     res.status(400).json({ error: "Missing WebAuthn response" });
     return;
   }
+  const body = parsedBody.data;
 
   const [key] = await db
     .select()
@@ -333,7 +330,7 @@ router.post("/auth/passkey/login-verify", async (req, res): Promise<void> => {
   let verification;
   try {
     verification = await verifyAuthenticationResponse({
-      response: body.response,
+      response: body.response as unknown as AuthenticationResponseJSON,
       expectedChallenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
@@ -388,20 +385,14 @@ router.post("/auth/passkey/login-verify", async (req, res): Promise<void> => {
   res.json({ verified: true, user: await mapUser(user) });
 });
 
-// ---------------------------------------------------------------------------
-// Password reset second factor — a reset link alone never changes a
-// password; the account's passkey must also sign a fresh server challenge,
-// same crypto-gated proof used for login MFA (see auth.ts reset-password/face
-// for the face-scan equivalent).
-// ---------------------------------------------------------------------------
-
-// POST /auth/reset-password/passkey-options
+// A reset link alone never changes the password — the account's passkey must also sign a fresh server challenge, same crypto-gated proof as login MFA (see auth.ts reset-password/face for the face-scan equivalent).
 router.post("/auth/reset-password/passkey-options", async (req, res): Promise<void> => {
-  const body = req.body as { token?: string };
-  if (!body?.token) {
+  const parsedBody = ResetPasskeyOptionsBody.safeParse(req.body);
+  if (!parsedBody.success) {
     res.status(400).json({ error: "Missing reset token" });
     return;
   }
+  const body = parsedBody.data;
 
   const record = await loadUsableResetToken(body.token);
   if (!record) {
@@ -436,7 +427,6 @@ router.post("/auth/reset-password/passkey-options", async (req, res): Promise<vo
   res.json(options);
 });
 
-// POST /auth/reset-password/passkey-verify
 router.post("/auth/reset-password/passkey-verify", async (req, res): Promise<void> => {
   const resetToken = req.session.resetToken;
   const expectedChallenge = req.session.webauthnChallenge;
@@ -454,11 +444,12 @@ router.post("/auth/reset-password/passkey-verify", async (req, res): Promise<voi
     return;
   }
 
-  const body = req.body as { response?: AuthenticationResponseJSON; newPassword?: string };
-  if (!body?.response || !body.newPassword || body.newPassword.length < 8) {
+  const parsedBody = ResetPasskeyVerifyBody.safeParse(req.body);
+  if (!parsedBody.success) {
     res.status(400).json({ error: "Missing passkey response or new password" });
     return;
   }
+  const body = parsedBody.data;
 
   const [key] = await db.select().from(passkeysTable).where(eq(passkeysTable.credentialId, body.response.id));
   if (!key || key.userId !== record.userId) {
@@ -473,7 +464,7 @@ router.post("/auth/reset-password/passkey-verify", async (req, res): Promise<voi
   let verification;
   try {
     verification = await verifyAuthenticationResponse({
-      response: body.response,
+      response: body.response as unknown as AuthenticationResponseJSON,
       expectedChallenge,
       expectedOrigin: origin,
       expectedRPID: rpID,

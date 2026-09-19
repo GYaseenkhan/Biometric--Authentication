@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, Modal, Pressable } from 'react-native';
-import { listUploads, getUpload, deleteUpload, pickAndUploadFile, downloadAndShare, base64ToUtf8, type UploadMeta, type UploadContent } from '../lib/uploads';
+import { listUploads, getUpload, deleteUpload, pickAndUploadFile, downloadAndShare, base64ToUtf8, CONTENT_SOURCE_OPTIONS, type ContentSource, type UploadMeta, type UploadContent } from '../lib/uploads';
 import { Card, Button, Badge, Centered } from '../components/ui';
 import { colors, fonts } from '../theme';
 
@@ -17,6 +17,12 @@ export function UploadsScreen() {
   const [uploading, setUploading] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [preview, setPreview] = useState<UploadContent | null>(null);
+  // Declared provenance for the next upload. Pre-set to own_work as the
+  // common case; it is a factual claim about the file, not a consent grant,
+  // and training still additionally requires the separate content-
+  // personalization consent. The server treats an absent field as
+  // "unspecified" and excludes it from training either way.
+  const [contentSource, setContentSource] = useState<ContentSource>('own_work');
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -32,7 +38,7 @@ export function UploadsScreen() {
     setError('');
     setUploading(true);
     try {
-      const result = await pickAndUploadFile();
+      const result = await pickAndUploadFile(contentSource);
       if (result) refresh();
     } catch (err: any) {
       setError(err?.message || 'Upload failed.');
@@ -86,6 +92,31 @@ export function UploadsScreen() {
         can read them.
       </Text>
 
+      {/* Provenance picker. Chips rather than a Picker component so no new
+          native dependency is pulled in for five options, and so every choice
+          is visible at once instead of hidden behind a dropdown — the whole
+          point is that the uploader sees what they are declaring. */}
+      <Text style={styles.sourceLabel}>Where is this from?</Text>
+      <View style={styles.sourceRow}>
+        {CONTENT_SOURCE_OPTIONS.map((opt) => {
+          const selected = contentSource === opt.value;
+          return (
+            <Pressable
+              key={opt.value}
+              onPress={() => setContentSource(opt.value)}
+              style={[styles.sourceChip, selected && styles.sourceChipOn]}
+            >
+              <Text style={[styles.sourceChipText, selected && styles.sourceChipTextOn]}>{opt.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {contentSource !== 'own_work' && (
+        <Text style={styles.sourceNote}>
+          Content you don't hold the rights to is stored and encrypted as normal, but is kept out of AI training.
+        </Text>
+      )}
+
       <Button onPress={handlePick} isLoading={uploading} style={{ marginBottom: 20 }}>
         Upload File
       </Button>
@@ -106,7 +137,15 @@ export function UploadsScreen() {
                   <Text style={styles.fileName} numberOfLines={1}>{u.fileName}</Text>
                   <Text style={styles.fileMeta}>{formatSize(u.sizeBytes)} · {new Date(u.createdAt).toLocaleDateString()}</Text>
                 </View>
-                <Badge tone="outline">{u.fileType}</Badge>
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                  <Badge tone="outline">{u.fileType}</Badge>
+                  {/* Explicit === false, not a falsy check: an older server
+                      that predates this field returns undefined, and treating
+                      that as "excluded" would badge every file on a backend
+                      that simply hasn't been upgraded yet. A client should not
+                      assert a server's behaviour from a missing field. */}
+                  {u.trainingEligible === false && <Badge tone="outline">not used for AI</Badge>}
+                </View>
               </View>
               <View style={styles.actionsRow}>
                 <Button size="sm" variant="outline" onPress={() => handlePreview(u)} disabled={busy} style={{ flexGrow: 1 }}>
@@ -161,6 +200,13 @@ export function UploadsScreen() {
 const styles = StyleSheet.create({
   container: { padding: 20, paddingBottom: 40 },
   intro: { fontFamily: fonts.mono, color: colors.mutedForeground, fontSize: 11, lineHeight: 17, marginBottom: 16 },
+  sourceLabel: { fontFamily: fonts.mono, color: colors.mutedForeground, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
+  sourceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
+  sourceChip: { borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 6 },
+  sourceChipOn: { borderColor: colors.primary, backgroundColor: colors.card },
+  sourceChipText: { fontFamily: fonts.mono, fontSize: 10, color: colors.mutedForeground },
+  sourceChipTextOn: { color: colors.primary },
+  sourceNote: { fontFamily: fonts.mono, color: colors.mutedForeground, fontSize: 10, lineHeight: 15, marginBottom: 14 },
   errorText: { fontFamily: fonts.mono, color: colors.destructive, fontSize: 11, marginBottom: 12 },
   emptyText: { fontFamily: fonts.mono, color: colors.mutedForeground, fontSize: 12, textAlign: 'center', marginTop: 8 },
   fileCard: { marginBottom: 12 },

@@ -46,6 +46,8 @@ pnpm --filter @workspace/secureai run dev     # web app
 | `SESSION_SECRET` | Yes | express-session secret |
 | `FILE_ENCRYPTION_KEY` | No | AES-256 key (64-char hex) for encrypting uploads/face descriptors/payment tokens at rest; falls back to a key derived from `SESSION_SECRET` for local dev |
 | `WEBHOOK_SECRET` | No | HMAC secret for payment webhook signature verification; falls back to a dev default |
+| `APP_BASE_URL` | No | Base URL used to build the absolute link inside password-reset/parent-consent emails; falls back to `http://localhost:<FRONTEND_PORT>` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | No | Real email delivery for password-reset and parent-consent links. Leave `SMTP_HOST` unset to keep using the dev-only link returned in the API response instead |
 
 **Demo accounts** (all use password `Password123!`):
 

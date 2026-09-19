@@ -13,6 +13,16 @@ export const paymentsTable = pgTable("payments", {
   currency: text("currency").notNull().default("USD"),
   status: text("status", { enum: ["pending", "completed", "failed", "refunded"] }).notNull().default("pending"),
   description: text("description").notNull(),
+  // Populated only when status = "failed" — see lib/paymentSimulation.ts.
+  // Both null on every successful or still-pending payment.
+  declineCode: text("decline_code"),
+  declineMessage: text("decline_message"),
+  // Client-generated, e.g. crypto.randomUUID() per purchase attempt.
+  // Globally unique (not just per-user): a retried request with the same
+  // key returns the ORIGINAL payment instead of creating a second charge
+  // — see routes/payments.ts. Null for payments created before this
+  // existed, or from any call that doesn't supply one.
+  idempotencyKey: text("idempotency_key").unique(),
   // AES-256-GCM encrypted at rest (see lib/fileEncryption.ts).
   providerTokenCiphertext: text("provider_token_ciphertext").notNull(),
   providerTokenIv: text("provider_token_iv").notNull(),

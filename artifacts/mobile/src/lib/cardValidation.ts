@@ -1,10 +1,23 @@
 /**
- * Client-side-only card field validation for realism in the payment UI.
- * These values are never sent anywhere — see the module comment in
- * pages/Payments.tsx for the full PCI-scope reasoning. This file exists
- * purely so the format/checksum logic is testable in isolation like
- * everything else in this codebase, not because the values it validates
- * ever leave the browser.
+ * Client-side-only card field validation, for realism in the payment UI.
+ * The full number, expiry and CVV never leave this device — only the brand
+ * and last 4 digits are sent, and only to drive the simulated processor's
+ * decline logic. See PaymentsScreen.tsx for the PCI-scope reasoning.
+ *
+ * DUPLICATED FROM artifacts/secureai/src/lib/cardValidation.ts, deliberately
+ * and with the cost acknowledged. This package sits outside the pnpm
+ * workspace (React Native pins React 18.3 against the workspace's 19.x —
+ * see this directory's pnpm-workspace.yaml), so it cannot import from
+ * @workspace/* the way the web app and API server share code. The realistic
+ * alternatives were all worse at this scale: publishing a private package
+ * for ~130 lines of pure arithmetic, or restructuring the workspace around
+ * a version conflict that has nothing to do with payments.
+ *
+ * The real risk of a copy is silent divergence, so: this file is pure
+ * functions over strings with no platform dependencies, and it must stay
+ * byte-for-byte equivalent in behaviour to the web copy. Change one, change
+ * both. If a third consumer ever appears, that is the signal to stop copying
+ * and extract it properly.
  */
 
 export interface CardDetails {
@@ -123,8 +136,7 @@ export function isCardFormValid(card: CardDetails): boolean {
 }
 
 /** Last 4 digits only — the one part of a card number that's routinely
- *  shown on real receipts precisely because it isn't sensitive by itself.
- *  Still purely a display value: never sent to or stored by the backend. */
+ *  shown on real receipts precisely because it isn't sensitive by itself. */
 export function getLast4(number: string): string {
   const digits = number.replace(/\D/g, '');
   return digits.slice(-4);

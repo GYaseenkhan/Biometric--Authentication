@@ -14,12 +14,20 @@ async function csrfHeader(): Promise<Record<string, string>> {
   return token ? { 'X-CSRF-Token': token } : {};
 }
 
-async function request<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  options: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+): Promise<T> {
   const method = options.method ?? 'GET';
   const isMutating = method !== 'GET' && method !== 'HEAD';
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Origin: APP_ORIGIN,
+    // Caller-supplied headers (e.g. Idempotency-Key) go BEFORE the CSRF
+    // header, not after. Later spreads win, so putting them last would let
+    // any caller overwrite the CSRF token — or Origin — with a value of its
+    // own choosing. Ordering is the whole control here.
+    ...(options.headers ?? {}),
     ...(isMutating ? await csrfHeader() : {}),
   };
 
@@ -222,12 +230,72 @@ export async function listPlans(): Promise<Plan[]> {
   return request('/payments/plans');
 }
 
-export async function createPayment(amount: number, currency: string, description: string): Promise<Payment> {
-  return request('/payments', { method: 'POST', body: { amount, currency, description } });
+/**
+ * Idempotency key for a payment attempt.
+ *
+ * React Native's Hermes runtime provides neither crypto.randomUUID nor, on
+ * every version, crypto.getRandomValues — so this uses the strongest source
+ * actually present and falls back to time + counter + Math.random.
+ *
+ * What the fallback does and does not buy, stated plainly: it gives
+ * UNIQUENESS, which is what idempotency needs — two attempts must not
+ * collide, and a collision now returns a 409 rather than someone else's
+ * payment (the server scopes its lookup to the calling user; see the
+ * comments in routes/payments.ts). It does NOT give unpredictability. That
+ * distinction only stopped mattering once the server was fixed to scope by
+ * userId; before that, a guessable key read another account's record, which
+ * is precisely the kind of server-side guarantee that should never have
+ * depended on a client's choice of random source.
+ */
+let idempotencyCounter = 0;
+export function newIdempotencyKey(): string {
+  const g = globalThis as { crypto?: { getRandomValues?: (a: Uint8Array) => Uint8Array } };
+  if (typeof g.crypto?.getRandomValues === 'function') {
+    const bytes = g.crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  idempotencyCounter += 1;
+  const rand = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  return `${Date.now().toString(36)}-${idempotencyCounter.toString(36)}-${rand}`;
 }
 
-export async function subscribe(planId: Plan['id']): Promise<{ payment: Payment; subscriptionPlan: string }> {
-  return request('/payments/subscribe', { method: 'POST', body: { planId } });
+/**
+ * cardLast4/cardBrand are the ONLY card-derived values sent. The full
+ * number, expiry and CVV never leave the device — they exist in component
+ * state just long enough to validate, exactly as on web. The server uses
+ * last4 to drive its simulated decline logic (lib/paymentSimulation.ts)
+ * against published test-card numbers; omitting it always simulates
+ * success, which is what this client used to do unintentionally.
+ *
+ * idempotencyKey is passed as a header rather than a body field because
+ * that is where the server reads it, and because it identifies the REQUEST
+ * rather than the payment — a retry of the same intent carries the same
+ * key, which is what makes a duplicate charge impossible.
+ */
+export async function createPayment(
+  amount: number,
+  currency: string,
+  description: string,
+  card?: { last4: string; brand: string },
+  idempotencyKey?: string,
+): Promise<Payment> {
+  return request('/payments', {
+    method: 'POST',
+    body: { amount, currency, description, cardLast4: card?.last4 ?? null, cardBrand: card?.brand ?? null },
+    headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+  });
+}
+
+export async function subscribe(
+  planId: Plan['id'],
+  card?: { last4: string; brand: string },
+  idempotencyKey?: string,
+): Promise<{ payment: Payment; subscriptionPlan: string }> {
+  return request('/payments/subscribe', {
+    method: 'POST',
+    body: { planId, cardLast4: card?.last4 ?? null, cardBrand: card?.brand ?? null },
+    headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+  });
 }
 
 export { request };
