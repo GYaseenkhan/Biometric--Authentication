@@ -195,6 +195,23 @@ Controls:
 Current Status:
 The AI/ML PoC does not expose a public inference API; therefore extraction testing is demonstrated through controlled prompt-based evaluation of the hardened model.
 
+### AI Model Extraction Threat
+
+Risk:
+An attacker may attempt to reconstruct training data or model behaviour through repeated prompts.
+
+Threat:
+Model extraction and training-data leakage.
+
+Controls:
+- Query monitoring
+- Rate limiting
+- Audit logging
+- Detection of repeated extraction-style prompts
+
+Current Status:
+The AI/ML PoC does not expose a public inference API. Extraction resistance is demonstrated through controlled testing of the hardened model using multiple prompt variants.
+
 ### Access control
 
 | Threat (STRIDE) | Scenario | Control | Status |
