@@ -92,12 +92,13 @@ def generate_corpus(n_users=5):
     # one user who never consented - must never reach training
     records.append(make_record("user-99", "this user did not consent", consented=False))
 
-    # attacker flooding the training corpus
+    # attacker flooding the corpus with poisoned data
+
     for i in range(6):
         records.append(
-           make_record(
-            "attacker-01",
-            f"poisoned-record-{i}"
+            make_record(
+                "attacker-01",
+                CANARY_SENTENCE
            )
         )
 
