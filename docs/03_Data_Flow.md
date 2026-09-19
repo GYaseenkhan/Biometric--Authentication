@@ -116,3 +116,27 @@ If an inference API is added in future, model-theft and extraction risks should 
 
 \- Security alerting for abnormal usage patterns
 
+\### Model Theft / Extraction Protection
+
+
+
+The current AI/ML proof-of-concept does not expose a public inference API.
+
+
+
+As a result, large-scale automated model extraction is not currently applicable to this PoC.
+
+
+
+If an inference API is introduced in a future version:
+
+
+
+\- Request rate limiting should be applied using the existing `middlewares/requestRateLimit.ts` pattern already used elsewhere in the application.
+
+\- Query activity should be monitored for extraction-style behaviour.
+
+\- Repeated prompt variations and unusually high query volumes should be logged as suspicious activity.
+
+\- Security monitoring should review extraction-style query patterns and investigate anomalies.
+
