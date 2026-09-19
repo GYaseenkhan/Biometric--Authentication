@@ -8,14 +8,12 @@ import usersRouter from "./users";
 import securityRouter from "./security";
 import paymentsRouter from "./payments";
 import uploadsRouter from "./uploads";
+import behaviorRouter from "./behavior";
+import contentProfileRouter from "./contentProfile";
 
 const router: IRouter = Router();
 
-// webhooksRouter has no session/auth requirement (server-to-server, HMAC
-// verified) and MUST be mounted before any router with a path-less
-// `router.use(someMiddleware)` — e.g. security.ts's blanket MFA gate would
-// otherwise intercept any request that doesn't match an earlier router,
-// including this one, before it ever reaches its own handler.
+// webhooksRouter has no session/auth requirement (server-to-server, HMAC verified) — must be mounted before any router with a path-less `router.use(middleware)` (e.g. security.ts's blanket MFA gate), or that gate would intercept it first.
 router.use(healthRouter);
 router.use(webhooksRouter);
 router.use(authRouter);
@@ -25,5 +23,7 @@ router.use(usersRouter);
 router.use(securityRouter);
 router.use(paymentsRouter);
 router.use(uploadsRouter);
+router.use(behaviorRouter);
+router.use(contentProfileRouter);
 
 export default router;

@@ -75,13 +75,11 @@ app.get("/.well-known/assetlinks.json", (_req, res) => {
   ]);
 });
 
-// Trust the first reverse-proxy hop (Replit and most real deployments
-// terminate TLS upstream) so req.secure reflects X-Forwarded-Proto instead
-// of the plain-HTTP hop between the proxy and this process.
-// "true" (not a fixed hop count) so req.secure reflects the original
-// viewer protocol even behind a CDN-to-origin hop that's plain HTTP
-// (CloudFront -> EB, since EB's default domain has no HTTPS listener) --
-// CloudFront's own X-Forwarded-Proto is the leftmost, authoritative value.
+// "true" (not a fixed hop count): most real deployments terminate TLS
+// upstream, so req.secure needs to come from X-Forwarded-Proto rather than
+// the plain-HTTP hop between the proxy and this process -- see the
+// CloudFront-specific gap handled just below for why a fixed count isn't
+// enough either.
 app.set("trust proxy", true);
 
 // CloudFront (fronting EB, since EB's own domain has no HTTPS listener) does

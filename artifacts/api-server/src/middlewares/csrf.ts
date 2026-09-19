@@ -22,7 +22,9 @@ export function issueCsrfCookie(req: Request, res: Response, next: NextFunction)
     res.cookie(CSRF_COOKIE, token, {
       httpOnly: false,
       secure: process.env["NODE_ENV"] === "production",
-      sameSite: "lax",
+      // A split deployment (frontend and API on different domains) needs
+      // "none", which requires Secure.
+      sameSite: process.env["NODE_ENV"] === "production" ? "none" : "lax",
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days — independent of session lifetime
     });
   }

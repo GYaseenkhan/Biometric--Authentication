@@ -18,6 +18,7 @@ import { stripImageMetadata, detectImageFormat } from "../lib/imageSafety";
 import { stripVideoMetadata } from "../lib/videoSafety";
 import { scanBuffer } from "../lib/malwareScan";
 import { scanWithClamdIfConfigured } from "../lib/clamdClient";
+import { assessTrainingEligibility, isContentSource, type ContentSource } from "../lib/dataProvenance";
 
 const router: IRouter = Router();
 router.use(requireParentConsent, requireMfaEnrolled);
@@ -52,6 +53,12 @@ function getClientIp(req: import("express").Request): string {
 }
 
 function mapUploadMeta(row: typeof uploadsTable.$inferSelect) {
+  // Eligibility is recomputed from the stored source on every read rather
+  // than persisted alongside it. The matrix is Team 2's document and can
+  // change; a stored boolean would keep answering with the rules that applied
+  // the day the file landed, which is exactly the staleness the consent
+  // design elsewhere in this app is careful to avoid.
+  const eligibility = assessTrainingEligibility(row.contentSource, row.fileType);
   return {
     id: row.id,
     userId: row.userId,
@@ -60,6 +67,9 @@ function mapUploadMeta(row: typeof uploadsTable.$inferSelect) {
     fileType: row.fileType,
     sizeBytes: row.sizeBytes,
     createdAt: row.createdAt.toISOString(),
+    contentSource: row.contentSource,
+    trainingEligible: eligibility.eligible,
+    ...(eligibility.eligible ? {} : { trainingExclusionReason: eligibility.reason }),
   };
 }
 
@@ -81,6 +91,14 @@ router.post("/uploads", uploadRateLimit, async (req, res): Promise<void> => {
     return;
   }
   const { fileName, mimeType, dataBase64 } = parsed.data;
+
+  // An absent or unrecognised source is stored as "unspecified" rather than
+  // rejected. Refusing the upload would punish the user for a governance
+  // field, when the safe outcome is simply that the file stays out of every
+  // training corpus — it remains fully usable by its owner either way.
+  const declaredSource: ContentSource = isContentSource(parsed.data.contentSource)
+    ? parsed.data.contentSource
+    : "unspecified";
 
   const fileType = classifyMimeType(mimeType);
   if (!fileType) {
@@ -171,6 +189,7 @@ router.post("/uploads", uploadRateLimit, async (req, res): Promise<void> => {
     ciphertext: encrypted.ciphertext,
     iv: encrypted.iv,
     authTag: encrypted.authTag,
+    contentSource: declaredSource,
   }).returning();
 
   if (!upload) {
@@ -178,13 +197,35 @@ router.post("/uploads", uploadRateLimit, async (req, res): Promise<void> => {
     return;
   }
 
+  const eligibility = assessTrainingEligibility(declaredSource, fileType);
+
   await logEvent({
     eventType: "UPLOAD_CREATED",
-    details: `Encrypted ${fileType} file uploaded: ${fileName} (${plaintext.length} bytes)`,
+    details:
+      `Encrypted ${fileType} file uploaded: ${fileName} (${plaintext.length} bytes), ` +
+      `source=${declaredSource}, tier=${eligibility.tier}, copyright=${eligibility.copyrightRisk}`,
     userId,
     ipAddress: getClientIp(req),
     userAgent: req.headers["user-agent"],
   });
+
+  // A separate event from UPLOAD_CREATED, deliberately. The provenance
+  // decision is a governance outcome rather than a storage one, and a
+  // security_analyst reviewing what the models were allowed to learn from
+  // should be able to read that as its own trail — including which axis of
+  // the matrix refused, which is the part that says whether this is a
+  // copyright question or a missing-consent-workflow one.
+  if (!eligibility.eligible) {
+    await logEvent({
+      eventType: "TRAINING_SOURCE_REJECTED",
+      details:
+        `Upload ${upload.id} excluded from training corpora — blocked by ${eligibility.blockedBy}: ` +
+        `${eligibility.reason} (matrix: ${eligibility.matrixRows.join(" | ")})`,
+      userId,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers["user-agent"],
+    });
+  }
 
   res.status(201).json(CreateUploadResponse.parse(mapUploadMeta(upload)));
 });

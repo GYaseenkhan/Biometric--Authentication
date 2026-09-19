@@ -2,6 +2,8 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { seedIfEmpty } from "./lib/seed";
 import { startRetentionJob } from "./lib/retention";
+import { startSecurityAlertingJob } from "./lib/securityAlerting";
+import { ensureDeletionAuditTrigger } from "./lib/dbBootstrap";
 
 const rawPort = process.env["PORT"];
 
@@ -25,6 +27,8 @@ app.listen(port, async (err) => {
 
   logger.info({ port }, "Server listening");
 
+  await ensureDeletionAuditTrigger();
+
   // Seed demo data if DB is empty
   try {
     await seedIfEmpty();
@@ -33,4 +37,5 @@ app.listen(port, async (err) => {
   }
 
   startRetentionJob();
+  startSecurityAlertingJob();
 });

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { desc, gte, lte, eq, and, ilike, count, isNotNull, type SQL } from "drizzle-orm";
+import { desc, gte, lte, eq, and, ilike, count, type SQL } from "drizzle-orm";
 import { db, securityLogsTable, threatsTable, usersTable } from "@workspace/db";
 import {
   ListSecurityLogsQueryParams,
@@ -7,91 +7,30 @@ import {
   ListThreatsResponse,
   GetSecurityDashboardResponse,
   VerifyLogIntegrityResponse,
+  RepairLogChainResponse,
+  RestoreLogChainResponse,
+  ListDeletionAuditResponse,
 } from "@workspace/api-zod";
 import { requireMfaEnrolled } from "../middlewares/requireMfaEnrolled";
-import { verifyLogChain } from "../lib/auditLog";
+import { requireParentConsent } from "../middlewares/requireParentConsent";
+import { verifyLogChain, repairLogChain, restoreLogChain, listDeletionAudit } from "../lib/auditLog";
+import { computeActiveAlerts } from "../lib/securityAlerting";
+
+function getClientIp(req: { headers: Record<string, string | string[] | undefined>; socket?: { remoteAddress?: string } }): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string") return forwarded.split(",")[0]?.trim() ?? "unknown";
+  return req.socket?.remoteAddress ?? "unknown";
+}
 
 const router: IRouter = Router();
-router.use(requireMfaEnrolled);
+router.use(requireParentConsent, requireMfaEnrolled);
 
-// Audit log visibility (logs, chain verification, the dashboard's log feed)
-// is exclusive to security_analyst — deliberately NOT admin too. This is a
-// separation-of-duties choice: the accounts with the authority to take
-// actions (admins — user management, role changes, deletion) shouldn't
-// also be the ones who control visibility into the audit trail of those
-// actions, or the audit trail stops being a meaningful check on admin
-// behavior specifically. security_analyst has no user-management authority
-// (routes/users.ts checks specifically for "admin", not this helper), and
-// admin has no log visibility — the two roles are deliberately disjoint,
-// not admin-plus-something.
+// Admin is a superset role, including audit-log visibility — a deliberate departure from an earlier separation-of-duties design that kept admin and security_analyst disjoint (docs/04_Threat_Model_Risk_Assessment.md, "Admin/security_analyst merge"). That control is no longer in effect.
 function canSeeAuditLogs(role: string | undefined): boolean {
-  return role === "security_analyst";
+  return role === "security_analyst" || role === "admin";
 }
 
-const ALERT_WINDOW_MINUTES = 15;
-const RATE_LIMIT_SPIKE_THRESHOLD = 3; // 3+ RATE_LIMIT_HIT events from one IP in the window
-const LOGIN_FAILURE_SPIKE_THRESHOLD = 5; // 5+ LOGIN_FAILED events from one IP in the window
-
-interface SecurityAlert {
-  id: string;
-  severity: "medium" | "high";
-  message: string;
-  count: number;
-  windowMinutes: number;
-}
-
-// The signal (RATE_LIMIT_HIT / LOGIN_FAILED events) already exists and is
-// queryable via /security/logs — this closes the brief's actual ask
-// (§5.5: suspicious activity should be a *visible* signal, not just a
-// filterable one) by surfacing it proactively on the dashboard instead of
-// requiring a security_analyst to go looking. No new storage: recomputed
-// from security_logs on every dashboard request, same pattern as the other
-// dashboard counters above.
-async function computeActiveAlerts(): Promise<SecurityAlert[]> {
-  const since = new Date(Date.now() - ALERT_WINDOW_MINUTES * 60 * 1000);
-
-  const rateLimitByIp = await db
-    .select({ ipAddress: securityLogsTable.ipAddress, count: count() })
-    .from(securityLogsTable)
-    .where(and(eq(securityLogsTable.eventType, "RATE_LIMIT_HIT"), gte(securityLogsTable.timestamp, since), isNotNull(securityLogsTable.ipAddress)))
-    .groupBy(securityLogsTable.ipAddress);
-
-  const loginFailuresByIp = await db
-    .select({ ipAddress: securityLogsTable.ipAddress, count: count() })
-    .from(securityLogsTable)
-    .where(and(eq(securityLogsTable.eventType, "LOGIN_FAILED"), gte(securityLogsTable.timestamp, since), isNotNull(securityLogsTable.ipAddress)))
-    .groupBy(securityLogsTable.ipAddress);
-
-  const alerts: SecurityAlert[] = [];
-
-  for (const row of rateLimitByIp) {
-    if (row.ipAddress && row.count >= RATE_LIMIT_SPIKE_THRESHOLD) {
-      alerts.push({
-        id: `rate-limit-spike:${row.ipAddress}`,
-        severity: row.count >= RATE_LIMIT_SPIKE_THRESHOLD * 2 ? "high" : "medium",
-        message: `${row.count} rate-limit hits from ${row.ipAddress} in the last ${ALERT_WINDOW_MINUTES} minutes`,
-        count: row.count,
-        windowMinutes: ALERT_WINDOW_MINUTES,
-      });
-    }
-  }
-
-  for (const row of loginFailuresByIp) {
-    if (row.ipAddress && row.count >= LOGIN_FAILURE_SPIKE_THRESHOLD) {
-      alerts.push({
-        id: `login-failure-spike:${row.ipAddress}`,
-        severity: row.count >= LOGIN_FAILURE_SPIKE_THRESHOLD * 2 ? "high" : "medium",
-        message: `${row.count} failed logins from ${row.ipAddress} in the last ${ALERT_WINDOW_MINUTES} minutes — possible credential stuffing`,
-        count: row.count,
-        windowMinutes: ALERT_WINDOW_MINUTES,
-      });
-    }
-  }
-
-  return alerts.sort((a, b) => b.count - a.count);
-}
-
-// GET /security/dashboard
+// computeActiveAlerts() lives in lib/securityAlerting.ts, shared with the background push-notification job, so there's one detection implementation rather than a dashboard copy and a job copy that could silently drift apart.
 router.get("/security/dashboard", async (req, res): Promise<void> => {
   const userId = req.session.userId as number;
   const [sessionUser] = await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, userId));
@@ -108,9 +47,7 @@ router.get("/security/dashboard", async (req, res): Promise<void> => {
   );
   const [threatsResult] = await db.select({ count: count() }).from(threatsTable).where(eq(threatsTable.status, "active"));
 
-  // Event-level log detail is security_analyst-only (see canSeeAuditLogs) —
-  // everyone else, including admin, gets the telemetry counts above but no
-  // event-level detail (other users' IPs/emails are not "their own data").
+  // A plain "user" account gets the telemetry counts above but no event-level detail — other users' IPs/emails aren't "their own data".
   const recentLogs = canSeeLogs
     ? await db.select().from(securityLogsTable).orderBy(desc(securityLogsTable.timestamp)).limit(10)
     : [];
@@ -137,13 +74,7 @@ router.get("/security/dashboard", async (req, res): Promise<void> => {
   }));
 });
 
-// Wazuh-style multi-field filtering — every field is optional and combined
-// with AND. Previously `eventType` was declared in the OpenAPI spec and
-// sent by the frontend but never actually read here at all — the filter
-// dropdown looked wired up end-to-end and silently did nothing.
-// userEmail/ipAddress are case-insensitive partial matches (an analyst
-// searching "45.33" or a partial email shouldn't need the exact string);
-// fromDate/toDate bound a time range.
+// Every field is optional, combined with AND. userEmail/ipAddress use case-insensitive partial matches — an analyst searching "45.33" or a partial email shouldn't need the exact string.
 function buildLogFilterConditions(query: ReturnType<typeof ListSecurityLogsQueryParams.safeParse>): SQL[] {
   const conditions: SQL[] = [];
   if (!query.success) return conditions;
@@ -163,7 +94,6 @@ function buildLogFilterConditions(query: ReturnType<typeof ListSecurityLogsQuery
   return conditions;
 }
 
-// GET /security/logs — security_analyst only.
 router.get("/security/logs", async (req, res): Promise<void> => {
   const userId = req.session.userId as number;
   const [sessionUser] = await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, userId));
@@ -195,9 +125,7 @@ router.get("/security/logs", async (req, res): Promise<void> => {
   }))));
 });
 
-// GET /security/logs/verify — security_analyst only. Recomputes the whole
-// hash chain; O(n) over the log table, fine at demo scale, not something
-// to poll often.
+// Recomputes the whole hash chain — O(n) over the log table, fine at demo scale but not something to poll often.
 router.get("/security/logs/verify", async (req, res): Promise<void> => {
   const userId = req.session.userId as number;
   const [sessionUser] = await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, userId));
@@ -210,7 +138,55 @@ router.get("/security/logs/verify", async (req, res): Promise<void> => {
   res.json(VerifyLogIntegrityResponse.parse(result));
 });
 
-// GET /security/threats
+// A hash chain can prove a row was deleted/edited but can't recover it — this quarantines the untrustworthy tail rather than fabricate replacement content, and records the repair itself as a new, honest chain entry. No-op if already valid.
+router.post("/security/logs/repair", async (req, res): Promise<void> => {
+  const userId = req.session.userId as number;
+  const [sessionUser] = await db.select({ role: usersTable.role, email: usersTable.email }).from(usersTable).where(eq(usersTable.id, userId));
+  if (!canSeeAuditLogs(sessionUser?.role)) {
+    res.status(403).json({ error: "Security analyst access required" });
+    return;
+  }
+
+  const result = await repairLogChain({
+    userId,
+    userEmail: sessionUser?.email ?? null,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers["user-agent"] ?? null,
+  });
+  res.json(RepairLogChainResponse.parse(result));
+});
+
+// Re-inserts rows that were genuinely deleted (app-initiated or raw SQL alike), using the pre-delete snapshot captured by the security_logs_deletion_audit trigger — a real recovery since the snapshot is independent of the hash chain itself. No-op if already valid or if the break wasn't caused by a deletion.
+router.post("/security/logs/restore", async (req, res): Promise<void> => {
+  const userId = req.session.userId as number;
+  const [sessionUser] = await db.select({ role: usersTable.role, email: usersTable.email }).from(usersTable).where(eq(usersTable.id, userId));
+  if (!canSeeAuditLogs(sessionUser?.role)) {
+    res.status(403).json({ error: "Security analyst access required" });
+    return;
+  }
+
+  const result = await restoreLogChain({
+    userId,
+    userEmail: sessionUser?.email ?? null,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers["user-agent"] ?? null,
+  });
+  res.json(RestoreLogChainResponse.parse(result));
+});
+
+// Forensic view of every security_logs deletion the database trigger has captured, whether it happened through the app or a raw SQL client with DB credentials.
+router.get("/security/logs/deletions", async (req, res): Promise<void> => {
+  const userId = req.session.userId as number;
+  const [sessionUser] = await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, userId));
+  if (!canSeeAuditLogs(sessionUser?.role)) {
+    res.status(403).json({ error: "Security analyst access required" });
+    return;
+  }
+
+  const entries = await listDeletionAudit();
+  res.json(ListDeletionAuditResponse.parse(entries));
+});
+
 router.get("/security/threats", async (_req, res): Promise<void> => {
   const threats = await db.select().from(threatsTable).orderBy(desc(threatsTable.timestamp));
 
