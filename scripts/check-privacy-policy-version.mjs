@@ -6,8 +6,9 @@
 import fs from "node:fs";
 
 const read = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
-const web = /version:\s*'([^']+)'/.exec(read("artifacts/secureai/src/lib/privacyPolicy.ts"))?.[1];
-const api = /PRIVACY_POLICY_VERSION\s*=\s*"([^"]+)"/.exec(read("artifacts/api-server/src/lib/privacyPolicy.ts"))?.[1];
+// Either quote style, so a formatter changing quotes can't break the check.
+const web = /version:\s*["']([^"']+)["']/.exec(read("artifacts/secureai/src/lib/privacyPolicy.ts"))?.[1];
+const api = /PRIVACY_POLICY_VERSION\s*=\s*["']([^"']+)["']/.exec(read("artifacts/api-server/src/lib/privacyPolicy.ts"))?.[1];
 
 if (!web || !api) {
   console.error(`Could not find both versions (web: ${web ?? "missing"}, api: ${api ?? "missing"}).`);
