@@ -84,11 +84,22 @@ interface LogContent {
 // timestamp is set here in app code, not via defaultNow(), so it's part
 // of the hashed content and can't be backdated after the fact.
 function serialize(content: LogContent): string {
-  return [content.eventType, content.details, content.userId ?? "", content.userEmail ?? "", content.ipAddress ?? "", content.userAgent ?? "", content.timestamp].join("|");
+  return [
+    content.eventType,
+    content.details,
+    content.userId ?? "",
+    content.userEmail ?? "",
+    content.ipAddress ?? "",
+    content.userAgent ?? "",
+    content.timestamp,
+  ].join("|");
 }
 
 function computeHash(prevHash: string, content: LogContent): string {
-  return crypto.createHash("sha256").update(`${prevHash}|${serialize(content)}`).digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(`${prevHash}|${serialize(content)}`)
+    .digest("hex");
 }
 
 // Serializes writes so two concurrent logEvent calls can't both read the
@@ -129,7 +140,11 @@ async function doLogEvent(params: LogEventParams): Promise<void> {
 }
 
 async function insertEvent(params: LogEventParams): Promise<number> {
-  const [lastRow] = await db.select({ hash: securityLogsTable.hash }).from(securityLogsTable).orderBy(desc(securityLogsTable.id)).limit(1);
+  const [lastRow] = await db
+    .select({ hash: securityLogsTable.hash })
+    .from(securityLogsTable)
+    .orderBy(desc(securityLogsTable.id))
+    .limit(1);
   const prevHash = lastRow?.hash ?? GENESIS_HASH;
 
   const content: LogContent = {
@@ -143,17 +158,20 @@ async function insertEvent(params: LogEventParams): Promise<number> {
   };
   const hash = computeHash(prevHash, content);
 
-  const [inserted] = await db.insert(securityLogsTable).values({
-    eventType: content.eventType,
-    details: content.details,
-    userId: content.userId,
-    userEmail: content.userEmail,
-    ipAddress: content.ipAddress,
-    userAgent: content.userAgent,
-    timestamp: new Date(content.timestamp),
-    prevHash,
-    hash,
-  }).returning({ id: securityLogsTable.id });
+  const [inserted] = await db
+    .insert(securityLogsTable)
+    .values({
+      eventType: content.eventType,
+      details: content.details,
+      userId: content.userId,
+      userEmail: content.userEmail,
+      ipAddress: content.ipAddress,
+      userAgent: content.userAgent,
+      timestamp: new Date(content.timestamp),
+      prevHash,
+      hash,
+    })
+    .returning({ id: securityLogsTable.id });
   return inserted!.id;
 }
 
@@ -167,7 +185,10 @@ export interface ChainVerificationResult {
 // Catches edits, deletions, inserts, and reordering. Rows from before the
 // chain existed (hash/prevHash null) are skipped.
 export async function verifyLogChain(): Promise<ChainVerificationResult> {
-  const rows = await db.select().from(securityLogsTable).orderBy(asc(securityLogsTable.id));
+  const rows = await db
+    .select()
+    .from(securityLogsTable)
+    .orderBy(asc(securityLogsTable.id));
 
   let expectedPrevHash = GENESIS_HASH;
   let rowsChecked = 0;
@@ -176,14 +197,25 @@ export async function verifyLogChain(): Promise<ChainVerificationResult> {
   for (const row of rows) {
     if (row.hash === null || row.prevHash === null) {
       if (chainStarted) {
-        return { valid: false, rowsChecked, brokenAtId: row.id, reason: "Unchained row found after the chain had already started" };
+        return {
+          valid: false,
+          rowsChecked,
+          brokenAtId: row.id,
+          reason: "Unchained row found after the chain had already started",
+        };
       }
       continue; // pre-feature legacy row — not part of the chain
     }
     chainStarted = true;
 
     if (row.prevHash !== expectedPrevHash) {
-      return { valid: false, rowsChecked, brokenAtId: row.id, reason: "prevHash does not match the preceding row's hash — a row was deleted, inserted, or reordered" };
+      return {
+        valid: false,
+        rowsChecked,
+        brokenAtId: row.id,
+        reason:
+          "prevHash does not match the preceding row's hash — a row was deleted, inserted, or reordered",
+      };
     }
 
     const content: LogContent = {
@@ -197,7 +229,13 @@ export async function verifyLogChain(): Promise<ChainVerificationResult> {
     };
     const recomputed = computeHash(row.prevHash, content);
     if (recomputed !== row.hash) {
-      return { valid: false, rowsChecked, brokenAtId: row.id, reason: "Stored hash does not match recomputed hash — row content was edited" };
+      return {
+        valid: false,
+        rowsChecked,
+        brokenAtId: row.id,
+        reason:
+          "Stored hash does not match recomputed hash — row content was edited",
+      };
     }
 
     expectedPrevHash = row.hash;
@@ -220,22 +258,39 @@ export interface ChainRepairResult {
 // rows, or deletions with no snapshot): quarantine the untrustworthy tail —
 // keep the verified-good prefix, discard everything from the first broken
 // row onward — and record the repair itself as a new, honest chain entry.
-export async function repairLogChain(actor: { userId: number | null; userEmail: string | null; ipAddress: string | null; userAgent: string | null }): Promise<ChainRepairResult> {
+export async function repairLogChain(actor: {
+  userId: number | null;
+  userEmail: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+}): Promise<ChainRepairResult> {
   const before = await verifyLogChain();
   if (before.valid || before.brokenAtId === null) {
-    return { repaired: false, removedCount: 0, removedFromId: null, verification: before };
+    return {
+      repaired: false,
+      removedCount: 0,
+      removedFromId: null,
+      verification: before,
+    };
   }
 
   const brokenAtId = before.brokenAtId;
-  const [{ value: removedCount }] = await db.select({ value: sqlCount() }).from(securityLogsTable).where(gte(securityLogsTable.id, brokenAtId));
+  const [{ value: removedCount }] = await db
+    .select({ value: sqlCount() })
+    .from(securityLogsTable)
+    .where(gte(securityLogsTable.id, brokenAtId));
 
   // Tags this delete as app-initiated for the deletion-audit trigger.
   // set_config's third arg (true = "is_local") scopes it to this
   // transaction only, without string-interpolating the actor email into
   // raw SQL.
   await db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT set_config('app.actor_email', ${actor.userEmail ?? "unknown"}, true)`);
-    await tx.delete(securityLogsTable).where(gte(securityLogsTable.id, brokenAtId));
+    await tx.execute(
+      sql`SELECT set_config('app.actor_email', ${actor.userEmail ?? "unknown"}, true)`,
+    );
+    await tx
+      .delete(securityLogsTable)
+      .where(gte(securityLogsTable.id, brokenAtId));
   });
 
   await logEvent({
@@ -248,7 +303,12 @@ export async function repairLogChain(actor: { userId: number | null; userEmail: 
   });
 
   const after = await verifyLogChain();
-  return { repaired: true, removedCount, removedFromId: brokenAtId, verification: after };
+  return {
+    repaired: true,
+    removedCount,
+    removedFromId: brokenAtId,
+    verification: after,
+  };
 }
 
 export interface ChainRestoreResult {
@@ -291,11 +351,17 @@ interface SecurityLogDeletionSnapshotRow extends Record<string, unknown> {
 // Whatever's still missing after a restore attempt is guaranteed to have
 // no snapshot. Walks backward from the new break point to find exactly
 // which id(s) those are, for a clearer message than just "still broken".
-async function findUnrecoverableIds(afterBrokenAtId: number): Promise<number[]> {
+async function findUnrecoverableIds(
+  afterBrokenAtId: number,
+): Promise<number[]> {
   const unrecoverableIds: number[] = [];
   let probe = afterBrokenAtId - 1;
   while (probe > 0) {
-    const [stillExists] = await db.select({ id: securityLogsTable.id }).from(securityLogsTable).where(sql`${securityLogsTable.id} = ${probe}`).limit(1);
+    const [stillExists] = await db
+      .select({ id: securityLogsTable.id })
+      .from(securityLogsTable)
+      .where(sql`${securityLogsTable.id} = ${probe}`)
+      .limit(1);
     if (stillExists) break;
     unrecoverableIds.unshift(probe);
     probe -= 1;
@@ -308,10 +374,21 @@ async function findUnrecoverableIds(afterBrokenAtId: number): Promise<number[]> 
 // the hash. Only fixes rows that are actually MISSING (deleted) — a row
 // still present but edited in place has no delete event and therefore no
 // snapshot; that case is left for repairLogChain to quarantine.
-export async function restoreLogChain(actor: { userId: number | null; userEmail: string | null; ipAddress: string | null; userAgent: string | null }): Promise<ChainRestoreResult> {
+export async function restoreLogChain(actor: {
+  userId: number | null;
+  userEmail: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+}): Promise<ChainRestoreResult> {
   const before = await verifyLogChain();
   if (before.valid || before.brokenAtId === null) {
-    return { restored: false, restoredCount: 0, restoredIds: [], unrecoverableIds: [], verification: before };
+    return {
+      restored: false,
+      restoredCount: 0,
+      restoredIds: [],
+      unrecoverableIds: [],
+      verification: before,
+    };
   }
 
   const brokenAtId = before.brokenAtId;
@@ -332,7 +409,13 @@ export async function restoreLogChain(actor: { userId: number | null; userEmail:
   if (recoverable.rows.length === 0) {
     // Either the break wasn't caused by a deletion (edited in place), or
     // it predates this audit trigger and so has no snapshot.
-    return { restored: false, restoredCount: 0, restoredIds: [], unrecoverableIds: [], verification: before };
+    return {
+      restored: false,
+      restoredCount: 0,
+      restoredIds: [],
+      unrecoverableIds: [],
+      verification: before,
+    };
   }
 
   const restoredIds: number[] = [];
@@ -350,24 +433,36 @@ export async function restoreLogChain(actor: { userId: number | null; userEmail:
     `);
 
     restoredIds.push(id);
-    const who = snapshot.deleted_by_app_actor ? snapshot.deleted_by_app_actor : `db role "${snapshot.deleted_by_db_role}"`;
-    const from = snapshot.deleted_by_client_addr ? ` from ${snapshot.deleted_by_client_addr}` : "";
-    attributions.push(`#${id} (deleted ${new Date(snapshot.deleted_at).toISOString()} by ${who}${from})`);
+    const who = snapshot.deleted_by_app_actor
+      ? snapshot.deleted_by_app_actor
+      : `db role "${snapshot.deleted_by_db_role}"`;
+    const from = snapshot.deleted_by_client_addr
+      ? ` from ${snapshot.deleted_by_client_addr}`
+      : "";
+    attributions.push(
+      `#${id} (deleted ${new Date(snapshot.deleted_at).toISOString()} by ${who}${from})`,
+    );
   }
 
   if (restoredIds.length > 0) {
     // OVERRIDING SYSTEM VALUE inserts don't advance the id sequence — without
     // this, the next normal logEvent() insert could try to reuse an id we
     // just restored.
-    await db.execute(sql`SELECT setval(pg_get_serial_sequence('security_logs', 'id'), (SELECT MAX(id) FROM security_logs))`);
+    await db.execute(
+      sql`SELECT setval(pg_get_serial_sequence('security_logs', 'id'), (SELECT MAX(id) FROM security_logs))`,
+    );
   }
 
   const after = await verifyLogChain();
-  const unrecoverableIds = !after.valid && after.brokenAtId !== null ? await findUnrecoverableIds(after.brokenAtId) : [];
+  const unrecoverableIds =
+    !after.valid && after.brokenAtId !== null
+      ? await findUnrecoverableIds(after.brokenAtId)
+      : [];
 
-  const unrecoverableNote = unrecoverableIds.length > 0
-    ? ` ${unrecoverableIds.length} row(s) had no deletion snapshot available (id ${unrecoverableIds.join(", ")}) and remain missing — likely deleted before this audit trigger existed.`
-    : "";
+  const unrecoverableNote =
+    unrecoverableIds.length > 0
+      ? ` ${unrecoverableIds.length} row(s) had no deletion snapshot available (id ${unrecoverableIds.join(", ")}) and remain missing — likely deleted before this audit trigger existed.`
+      : "";
 
   await logEvent({
     eventType: "AUDIT_LOG_CHAIN_RESTORED",
@@ -378,7 +473,13 @@ export async function restoreLogChain(actor: { userId: number | null; userEmail:
     userAgent: actor.userAgent,
   });
 
-  return { restored: restoredIds.length > 0, restoredCount: restoredIds.length, restoredIds, unrecoverableIds, verification: after };
+  return {
+    restored: restoredIds.length > 0,
+    restoredCount: restoredIds.length,
+    restoredIds,
+    unrecoverableIds,
+    verification: after,
+  };
 }
 
 export interface DeletionAuditEntry {

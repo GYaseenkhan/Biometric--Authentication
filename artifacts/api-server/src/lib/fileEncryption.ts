@@ -14,7 +14,9 @@ function resolveKey(): Buffer {
   if (configured) {
     const key = Buffer.from(configured, "hex");
     if (key.length !== 32) {
-      throw new Error("FILE_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)");
+      throw new Error(
+        "FILE_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)",
+      );
     }
     return key;
   }
@@ -50,7 +52,10 @@ export function decryptFile(file: EncryptedFile): Buffer {
     { authTagLength: 16 },
   );
   decipher.setAuthTag(Buffer.from(file.authTag, "base64"));
-  return Buffer.concat([decipher.update(Buffer.from(file.ciphertext, "base64")), decipher.final()]);
+  return Buffer.concat([
+    decipher.update(Buffer.from(file.ciphertext, "base64")),
+    decipher.final(),
+  ]);
 }
 
 /** Convenience wrappers for encrypting a JSON-serializable value (e.g. a
