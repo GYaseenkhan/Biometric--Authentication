@@ -16,7 +16,11 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 /** Issues a csrf_token cookie for any client that doesn't already have one.
  *  Readable by JS (not httpOnly) — the frontend must read it and echo it
  *  back as a header on state-changing requests. */
-export function issueCsrfCookie(req: Request, res: Response, next: NextFunction): void {
+export function issueCsrfCookie(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
   if (!req.cookies?.[CSRF_COOKIE]) {
     const token = crypto.randomBytes(32).toString("base64url");
     res.cookie(CSRF_COOKIE, token, {
@@ -40,7 +44,11 @@ function timingSafeEqualStr(a: string, b: string): boolean {
 
 /** Rejects state-changing requests whose X-CSRF-Token header doesn't match
  *  the csrf_token cookie. */
-export function requireCsrfMatch(req: Request, res: Response, next: NextFunction): void {
+export function requireCsrfMatch(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
   if (SAFE_METHODS.has(req.method)) {
     next();
     return;

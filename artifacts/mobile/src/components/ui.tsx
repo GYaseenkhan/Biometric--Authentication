@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -10,8 +10,8 @@ import {
   type TextInputProps,
   type PressableProps,
   type ViewProps,
-} from 'react-native';
-import { colors, fonts } from '../theme';
+} from "react-native";
+import { colors, fonts } from "../theme";
 
 // Sharp (non-rounded) corners everywhere, uppercase tracked mono labels, and
 // bordered "terminal/HUD" cards — mirrors artifacts/secureai/src/components/ui.tsx
@@ -21,13 +21,58 @@ import { colors, fonts } from '../theme';
 export function CornerAccents({ color = colors.primary }: { color?: string }) {
   const size = 14;
   const thickness = 1.5;
-  const base = { position: 'absolute' as const, width: size, height: size, borderColor: color };
+  const base = {
+    position: "absolute" as const,
+    width: size,
+    height: size,
+    borderColor: color,
+  };
   return (
     <>
-      <View style={[base, { top: 0, left: 0, borderTopWidth: thickness, borderLeftWidth: thickness }]} />
-      <View style={[base, { top: 0, right: 0, borderTopWidth: thickness, borderRightWidth: thickness }]} />
-      <View style={[base, { bottom: 0, left: 0, borderBottomWidth: thickness, borderLeftWidth: thickness }]} />
-      <View style={[base, { bottom: 0, right: 0, borderBottomWidth: thickness, borderRightWidth: thickness }]} />
+      <View
+        style={[
+          base,
+          {
+            top: 0,
+            left: 0,
+            borderTopWidth: thickness,
+            borderLeftWidth: thickness,
+          },
+        ]}
+      />
+      <View
+        style={[
+          base,
+          {
+            top: 0,
+            right: 0,
+            borderTopWidth: thickness,
+            borderRightWidth: thickness,
+          },
+        ]}
+      />
+      <View
+        style={[
+          base,
+          {
+            bottom: 0,
+            left: 0,
+            borderBottomWidth: thickness,
+            borderLeftWidth: thickness,
+          },
+        ]}
+      />
+      <View
+        style={[
+          base,
+          {
+            bottom: 0,
+            right: 0,
+            borderBottomWidth: thickness,
+            borderRightWidth: thickness,
+          },
+        ]}
+      />
     </>
   );
 }
@@ -54,58 +99,112 @@ export function Card({
   );
 }
 
-export function Label({ children, style }: { children: React.ReactNode; style?: any }) {
+export function Label({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: any;
+}) {
   return <Text style={[styles.label, style]}>{children}</Text>;
 }
 
 export function Input(props: TextInputProps) {
-  return <TextInput placeholderTextColor={colors.mutedForeground} style={[styles.input, props.style]} {...props} />;
+  return (
+    <TextInput
+      placeholderTextColor={colors.mutedForeground}
+      style={[styles.input, props.style]}
+      {...props}
+    />
+  );
 }
 
-type ButtonVariant = 'default' | 'outline' | 'ghost' | 'destructive';
-type ButtonSize = 'default' | 'sm';
+type ButtonVariant = "default" | "outline" | "ghost" | "destructive";
+type ButtonSize = "default" | "sm";
 
 export function Button({
   children,
   onPress,
   isLoading,
   disabled,
-  variant = 'default',
-  size = 'default',
+  variant = "default",
+  size = "default",
   style,
   ...props
-}: PressableProps & { children: React.ReactNode; isLoading?: boolean; variant?: ButtonVariant; size?: ButtonSize }) {
+}: PressableProps & {
+  children: React.ReactNode;
+  isLoading?: boolean;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+}) {
   const variantStyle = buttonVariants[variant];
   const isDisabled = disabled || isLoading;
   return (
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
-      style={[styles.button, size === 'sm' && styles.buttonSm, variantStyle.button, isDisabled && { opacity: 0.5 }, style]}
+      style={[
+        styles.button,
+        size === "sm" && styles.buttonSm,
+        variantStyle.button,
+        isDisabled && { opacity: 0.5 },
+        style,
+      ]}
       {...props}
     >
       {isLoading ? (
         <ActivityIndicator color={variantStyle.text.color as string} />
       ) : (
-        <Text style={[styles.buttonText, size === 'sm' && styles.buttonTextSm, variantStyle.text]}>{children}</Text>
+        <Text
+          style={[
+            styles.buttonText,
+            size === "sm" && styles.buttonTextSm,
+            variantStyle.text,
+          ]}
+        >
+          {children}
+        </Text>
       )}
     </Pressable>
   );
 }
 
-type BadgeTone = 'primary' | 'destructive' | 'success' | 'warning' | 'info' | 'outline';
+type BadgeTone =
+  "primary" | "destructive" | "success" | "warning" | "info" | "outline";
 
-export function Badge({ children, tone = 'outline' }: { children: React.ReactNode; tone?: BadgeTone }) {
-  const color = tone === 'outline' ? colors.mutedForeground : colors[tone];
+export function Badge({
+  children,
+  tone = "outline",
+}: {
+  children: React.ReactNode;
+  tone?: BadgeTone;
+}) {
+  const color = tone === "outline" ? colors.mutedForeground : colors[tone];
   return (
-    <View style={[styles.badge, { borderColor: tone === 'outline' ? colors.border : `${color}66`, backgroundColor: tone === 'outline' ? 'transparent' : `${color}1A` }]}>
+    <View
+      style={[
+        styles.badge,
+        {
+          borderColor: tone === "outline" ? colors.border : `${color}66`,
+          backgroundColor: tone === "outline" ? "transparent" : `${color}1A`,
+        },
+      ]}
+    >
       <Text style={[styles.badgeText, { color }]}>{children}</Text>
     </View>
   );
 }
 
-export function StatCard({ label, value, tone = 'primary' }: { label: string; value: string | number; tone?: BadgeTone }) {
-  const color = tone === 'outline' ? colors.foreground : colors[tone];
+export function StatCard({
+  label,
+  value,
+  tone = "primary",
+}: {
+  label: string;
+  value: string | number;
+  tone?: BadgeTone;
+}) {
+  const color = tone === "outline" ? colors.foreground : colors[tone];
   return (
     <Card style={styles.statCard} topAccent>
       <Text style={styles.statLabel}>{label}</Text>
@@ -118,10 +217,21 @@ export function Centered({ children }: { children: React.ReactNode }) {
   return <View style={styles.centered}>{children}</View>;
 }
 
-export function SectionNote({ children, tone = 'primary' }: { children: React.ReactNode; tone?: 'primary' | 'destructive' }) {
-  const color = tone === 'destructive' ? colors.destructive : colors.primary;
+export function SectionNote({
+  children,
+  tone = "primary",
+}: {
+  children: React.ReactNode;
+  tone?: "primary" | "destructive";
+}) {
+  const color = tone === "destructive" ? colors.destructive : colors.primary;
   return (
-    <View style={[styles.sectionNote, { borderColor: `${color}55`, backgroundColor: `${color}0D` }]}>
+    <View
+      style={[
+        styles.sectionNote,
+        { borderColor: `${color}55`, backgroundColor: `${color}0D` },
+      ]}
+    >
       <Text style={[styles.sectionNoteText, { color }]}>{children}</Text>
     </View>
   );
@@ -132,8 +242,16 @@ export function ShieldBadge({ size = 64 }: { size?: number }) {
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0.6, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0.6,
+          duration: 900,
+          useNativeDriver: true,
+        }),
       ]),
     );
     loop.start();
@@ -149,12 +267,19 @@ export function ShieldBadge({ size = 64 }: { size?: number }) {
         borderWidth: 1,
         borderColor: `${colors.primary}4D`,
         backgroundColor: `${colors.primary}1A`,
-        alignItems: 'center',
-        justifyContent: 'center',
+        alignItems: "center",
+        justifyContent: "center",
         opacity: pulse,
       }}
     >
-      <View style={{ width: inner, height: inner, borderWidth: 1.5, borderColor: colors.primary }} />
+      <View
+        style={{
+          width: inner,
+          height: inner,
+          borderWidth: 1.5,
+          borderColor: colors.primary,
+        }}
+      />
     </Animated.View>
   );
 }
@@ -165,16 +290,20 @@ const buttonVariants: Record<ButtonVariant, { button: any; text: any }> = {
     text: { color: colors.primaryForeground },
   },
   outline: {
-    button: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.primary },
+    button: {
+      backgroundColor: "transparent",
+      borderWidth: 1,
+      borderColor: colors.primary,
+    },
     text: { color: colors.primary },
   },
   ghost: {
-    button: { backgroundColor: 'transparent' },
+    button: { backgroundColor: "transparent" },
     text: { color: colors.mutedForeground },
   },
   destructive: {
     button: { backgroundColor: colors.destructive },
-    text: { color: '#1a0508' },
+    text: { color: "#1a0508" },
   },
 };
 
@@ -184,12 +313,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: 24,
-    position: 'relative',
+    position: "relative",
   },
   label: {
     fontFamily: fonts.mono,
     fontSize: 11,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 1.5,
     color: colors.mutedForeground,
     marginBottom: 8,
@@ -205,8 +334,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   button: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 14,
     paddingHorizontal: 16,
   },
@@ -217,8 +346,8 @@ const styles = StyleSheet.create({
   buttonText: {
     fontFamily: fonts.mono,
     fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    fontWeight: "700",
+    textTransform: "uppercase",
     letterSpacing: 1.5,
   },
   buttonTextSm: {
@@ -229,24 +358,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   badgeText: {
     fontFamily: fonts.mono,
     fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    fontWeight: "700",
+    textTransform: "uppercase",
     letterSpacing: 1,
   },
   statCard: {
-    flexBasis: '48%',
+    flexBasis: "48%",
     padding: 14,
     marginBottom: 12,
   },
   statLabel: {
     fontFamily: fonts.mono,
     fontSize: 9,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 1,
     color: colors.mutedForeground,
     marginBottom: 6,
@@ -254,12 +383,12 @@ const styles = StyleSheet.create({
   statValue: {
     fontFamily: fonts.mono,
     fontSize: 26,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   centered: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 40,
   },
   sectionNote: {
@@ -269,7 +398,7 @@ const styles = StyleSheet.create({
   sectionNoteText: {
     fontFamily: fonts.mono,
     fontSize: 11,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 1,
   },
 });

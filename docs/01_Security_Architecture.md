@@ -68,7 +68,7 @@ flowchart TB
   actually mandatory rather than a suggestion the client could skip.
 - CSRF sits in front of the MFA gate, not behind it: a forged cross-site request can't even reach a
   route handler without a matching `X-CSRF-Token`, regardless of MFA state.
-- Encryption and audit logging are library calls used *by* route handlers, not a separate service —
+- Encryption and audit logging are library calls used _by_ route handlers, not a separate service —
   there's no key-management service or external HSM in this PoC. `FILE_ENCRYPTION_KEY` is a single
   symmetric key from environment config. That's an accepted limitation of a demo, documented as such
   (see `04_Threat_Model_Risk_Assessment.md`, R-DP-3).
@@ -78,11 +78,11 @@ flowchart TB
 
 ## Mapping to the brief's CORE areas
 
-| Brief CORE area | Where it lives in this diagram |
- ---|---|
-| Authentication + MFA | `requireMfaEnrolled`, `auth`/`passkeys` routes, `users` table consent+descriptor columns |
-| Data protection | `fileEncryption.ts`, `imageSafety.ts`, `clamdClient.ts` (ClamAV), `malwareScan.ts` |
-| Access control | Route-level ownership checks inside each handler (not shown as a separate box — enforced per-route) |
-| Secure communication | Edge subgraph (HTTPS/HSTS, headers, CORS, CSRF) |
-| Logging | `auditLog.ts` → `security_logs` |
-| Risk assessment | See `04_Threat_Model_Risk_Assessment.md` |
+| Brief CORE area      | Where it lives in this diagram                                                                      |
+| -------------------- | --------------------------------------------------------------------------------------------------- |
+| Authentication + MFA | `requireMfaEnrolled`, `auth`/`passkeys` routes, `users` table consent+descriptor columns            |
+| Data protection      | `fileEncryption.ts`, `imageSafety.ts`, `clamdClient.ts` (ClamAV), `malwareScan.ts`                  |
+| Access control       | Route-level ownership checks inside each handler (not shown as a separate box — enforced per-route) |
+| Secure communication | Edge subgraph (HTTPS/HSTS, headers, CORS, CSRF)                                                     |
+| Logging              | `auditLog.ts` → `security_logs`                                                                     |
+| Risk assessment      | See `04_Threat_Model_Risk_Assessment.md`                                                            |

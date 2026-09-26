@@ -12,8 +12,8 @@ the web app's `/auth/passkey/*` WebAuthn endpoints. See "Why this uses Android K
 WebAuthn passkeys" below for why — short version: a full WebAuthn ceremony has a hard Digital Asset
 Links domain-trust requirement that no local dev tunnel can ever satisfy (confirmed on real hardware,
 not just an emulator limitation), so mobile was switched to a mechanism with no such requirement while
-keeping the same actual security property the brief asks for: *a biometric unlocks a device-held key
-that signs a server challenge; the biometric itself never leaves the device or reaches the server.*
+keeping the same actual security property the brief asks for: _a biometric unlocks a device-held key
+that signs a server challenge; the biometric itself never leaves the device or reaches the server._
 
 - **Enrollment**: `src/lib/biometricKey.ts`'s `enrollBiometricKey()` generates an RSA keypair in Android
   Keystore (`react-native-biometrics`' `createKeys()`), then immediately proves possession by signing a
@@ -27,7 +27,7 @@ that signs a server challenge; the biometric itself never leaves the device or r
   from the web app's `passkeys` table — mobile never touches `passkeys`/`passkeysRouter`, both factors
   just satisfy the same OR'd `requireMfaEnrolled` check.
 - **API field-name reuse, deliberately**: the `passkeyEnrolled`/`passkeyAvailable` fields in the shared
-  API response shapes were *not* renamed or extended — they were repurposed to mean "has any device-
+  API response shapes were _not_ renamed or extended — they were repurposed to mean "has any device-
   bound key, WebAuthn passkey or biometric key" (see `mapUser()` in `routes/auth.ts`). This avoided
   touching `lib/api-spec/openapi.yaml` or the generated `@workspace/api-zod` schemas at all; only what
   populates those fields server-side changed. `src/screens/LoginScreen.tsx` and `DashboardScreen.tsx`
@@ -44,14 +44,14 @@ mobile can use to finish MFA. Solved with a short-lived linking code:
 1. **Web, already fully authenticated** (Security Settings → "Link Mobile Device" → `Enroll.tsx`'s
    `LinkDeviceSection`): `createDeviceLinkCode()` (`src/lib/deviceLink.ts`) calls
    `POST /auth/biometric-key/create-link-code`, which requires `req.session.userId` — i.e. only a
-   session that's *already* passed this account's real MFA can mint a code. Returns a random 10-char
+   session that's _already_ passed this account's real MFA can mint a code. Returns a random 10-char
    hex code (~40 bits of entropy) valid for 10 minutes, single-use.
 2. **Mobile** (Login screen → "Link this device to an existing account" → `linkDeviceWithCode()` in
    `src/lib/biometricKey.ts`): generates a fresh Keystore keypair, signs the code itself via
    `BiometricPrompt` (the code doubles as the challenge — it's random and gets deleted from the
    server's pending-codes map the moment it's looked up, so there's no separate replay window to
    close), and POSTs to `POST /auth/biometric-key/redeem-link-code` — deliberately the one
-   **unauthenticated** endpoint in this whole file. That's safe specifically *because* step 1 gated
+   **unauthenticated** endpoint in this whole file. That's safe specifically _because_ step 1 gated
    code minting on already-proven MFA; redeem itself is additionally IP-rate-limited
    (`checkAndRecordRequest`, 10 attempts / 5 min) as defense in depth against code-guessing.
 3. On a valid redeem, the server inserts the new `biometric_keys` row and fully logs the session in —
@@ -263,7 +263,7 @@ immediately and consistently regardless of screen lock, fingerprint enrollment, 
 GMS then falls back to a "security key only" cross-platform flow (`Fido2RequestController.
 startCrossPlatformSecurityKey`) — a different code path than normal platform-passkey creation.
 
-**On the real phone**, `CreatePasswordOrPasskeyOperation` *succeeds* — confirming real hardware has no such
+**On the real phone**, `CreatePasswordOrPasskeyOperation` _succeeds_ — confirming real hardware has no such
 limitation and completes local passkey creation normally, no fallback needed.
 
 **But both paths converge on the same wall.** Whether via the emulator's cross-platform fallback or the
@@ -302,14 +302,14 @@ that reads it, like `EventEmitter`) undefined. `gradle.properties` already lists
 
 The first tunnel attempt used ngrok, whose free tier serves an HTML "you're about to visit…" warning page
 to any request lacking its own `ngrok-skip-browser-warning` header — which Android's asset-link verifier
-never sends. So the *first* domain (`assetlinks.json`, correctly written) was silently receiving that HTML
+never sends. So the _first_ domain (`assetlinks.json`, correctly written) was silently receiving that HTML
 page instead of JSON on every fetch. Switched to a Cloudflare Quick Tunnel (`cloudflared tunnel --url
 http://localhost:8080`), which has no such interstitial, confirmed via a direct fetch returning real JSON.
 This got past that specific bug, but led to the deeper platform limitation documented above.
 
 ### Also fixed: a CORS regression from adding the tunnel domain
 
-Adding `DEV_TUNNEL_DOMAIN` support to `allowedOrigins.ts` briefly broke the *web* app's login — the
+Adding `DEV_TUNNEL_DOMAIN` support to `allowedOrigins.ts` briefly broke the _web_ app's login — the
 original code only added the `localhost` fallback when `origins.size === 0`, so setting a tunnel domain
 disabled the localhost fallback entirely (`Error: Origin not allowed`, caught via the live server's error
 log). Fixed by making the tunnel domain additive alongside the localhost fallback rather than exclusive
@@ -318,7 +318,7 @@ with it — see `isProductionDeployment` in `allowedOrigins.ts`.
 ### If you want to attempt a real WebAuthn passkey ceremony anyway (historical — mobile no longer does this)
 
 1. Get a real HTTPS domain reachable from your device (a Cloudflare Quick Tunnel — `cloudflared tunnel
-   --url http://localhost:8080` — works and has no interstitial, unlike ngrok's free tier).
+--url http://localhost:8080` — works and has no interstitial, unlike ngrok's free tier).
 2. Set `DEV_TUNNEL_DOMAIN` on the api-server to that domain's hostname (see `allowedOrigins.ts`).
 3. Update `API_BASE_URL`, `APP_ORIGIN`, and `RP_ID` in `src/config.ts` to match that domain.
 4. Get your Android app's signing certificate SHA-256 fingerprint:
@@ -332,13 +332,13 @@ with it — see `isProductionDeployment` in `allowedOrigins.ts`.
 
 - **Cookies, not a bearer token.** The backend is session-cookie based (`express-session`). React
   Native's fetch persists cookies via the native HTTP stack automatically, same as a browser — no
-  extra library needed for that part. `@react-native-cookies/cookies` is used only to *read* the
+  extra library needed for that part. `@react-native-cookies/cookies` is used only to _read_ the
   non-`httpOnly` `csrf_token` cookie's value back into JS (there's no `document.cookie` here), to echo
   it as the `X-CSRF-Token` header the backend's double-submit CSRF check requires on every mutating
   request — see `src/lib/api.ts`.
 - **MFA policy: face OR passkey OR device biometric key, not all required.** `requireMfaEnrolled`
   (backend, `middlewares/requireMfaEnrolled.ts`) checks `faceEnrolled || passkeysTable row exists ||
-  biometricKeysTable row exists` — any one factor satisfies it. This is what lets a mobile account
+biometricKeysTable row exists` — any one factor satisfies it. This is what lets a mobile account
   (device-biometric-key only) and a web account (face and/or WebAuthn passkey) share the same gate
   without either being locked out by a factor it has no way to satisfy. See
   `docs/04_Threat_Model_Risk_Assessment.md`.

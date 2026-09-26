@@ -24,7 +24,8 @@ declare const process: { env: Record<string, string | undefined> };
 // building a release APK against a live deployed backend, e.g.:
 //   EXPO_PUBLIC_API_BASE_URL=https://secureai-api.onrender.com/api eas build ...
 // Falls back to the local-dev adb-reverse tunnel when unset.
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8080/api';
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
 
 // Sent as the Origin header on every request — must be on the backend's
 // FRONTEND_ORIGINS/ALLOWED_ORIGINS allowlist (see allowedOrigins.ts) for
@@ -34,7 +35,10 @@ export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://loca
 // origin for a native client the way a browser has one, so this is
 // necessarily an arbitrary-but-consistent placeholder the backend is
 // configured to trust specifically for the mobile app.
-export const APP_ORIGIN = process.env.EXPO_PUBLIC_APP_ORIGIN ?? 'http://localhost:8081';
+export const APP_ORIGIN =
+  process.env.EXPO_PUBLIC_APP_ORIGIN ?? "http://localhost:8081";
 
 // The privacy policy is one page for web and mobile: the live site's /privacy.
-export const PRIVACY_POLICY_URL = process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL ?? 'https://d2zb1uxt99m5ks.cloudfront.net/privacy';
+export const PRIVACY_POLICY_URL =
+  process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL ??
+  "https://d2zb1uxt99m5ks.cloudfront.net/privacy";

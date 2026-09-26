@@ -5,17 +5,28 @@
 //   node scripts/check-privacy-policy-version.mjs
 import fs from "node:fs";
 
-const read = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
+const read = (rel) =>
+  fs.readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 // Either quote style, so a formatter changing quotes can't break the check.
-const web = /version:\s*["']([^"']+)["']/.exec(read("artifacts/secureai/src/lib/privacyPolicy.ts"))?.[1];
-const api = /PRIVACY_POLICY_VERSION\s*=\s*["']([^"']+)["']/.exec(read("artifacts/api-server/src/lib/privacyPolicy.ts"))?.[1];
+const web = /version:\s*["']([^"']+)["']/.exec(
+  read("artifacts/secureai/src/lib/privacyPolicy.ts"),
+)?.[1];
+const api = /PRIVACY_POLICY_VERSION\s*=\s*["']([^"']+)["']/.exec(
+  read("artifacts/api-server/src/lib/privacyPolicy.ts"),
+)?.[1];
 
 if (!web || !api) {
-  console.error(`Could not find both versions (web: ${web ?? "missing"}, api: ${api ?? "missing"}).`);
+  console.error(
+    `Could not find both versions (web: ${web ?? "missing"}, api: ${api ?? "missing"}).`,
+  );
   process.exit(1);
 }
 if (web !== api) {
-  console.error(`Privacy policy versions differ: web text is ${web}, API records ${api}. Change both together.`);
+  console.error(
+    `Privacy policy versions differ: web text is ${web}, API records ${api}. Change both together.`,
+  );
   process.exit(1);
 }
-console.log(`Privacy policy version ${web} matches in the web text and the API.`);
+console.log(
+  `Privacy policy version ${web} matches in the web text and the API.`,
+);

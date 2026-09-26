@@ -1,13 +1,13 @@
-import path from 'path';
-import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'vite';
+import path from "path";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import { defineConfig } from "vite";
 
 const rawPort = process.env.PORT;
 
 if (!rawPort) {
   throw new Error(
-    'PORT environment variable is required but was not provided.',
+    "PORT environment variable is required but was not provided.",
   );
 }
 
@@ -21,7 +21,7 @@ const basePath = process.env.BASE_PATH;
 
 if (!basePath) {
   throw new Error(
-    'BASE_PATH environment variable is required but was not provided.',
+    "BASE_PATH environment variable is required but was not provided.",
   );
 }
 
@@ -30,32 +30,32 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      '@': path.resolve(import.meta.dirname, 'src'),
-      '@assets': path.resolve(
+      "@": path.resolve(import.meta.dirname, "src"),
+      "@assets": path.resolve(
         import.meta.dirname,
-        '..',
-        '..',
-        'attached_assets',
+        "..",
+        "..",
+        "attached_assets",
       ),
     },
-    dedupe: ['react', 'react-dom'],
+    dedupe: ["react", "react-dom"],
   },
   root: path.resolve(import.meta.dirname),
   build: {
-    outDir: path.resolve(import.meta.dirname, 'dist/public'),
+    outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
   },
   server: {
     port,
     strictPort: true,
-    host: '0.0.0.0',
+    host: "0.0.0.0",
     allowedHosts: true,
     fs: {
       strict: true,
     },
     proxy: {
-      '/api': {
-        target: 'http://localhost:8080',
+      "/api": {
+        target: "http://localhost:8080",
         changeOrigin: true,
         secure: false,
       },
@@ -63,7 +63,7 @@ export default defineConfig({
   },
   preview: {
     port,
-    host: '0.0.0.0',
+    host: "0.0.0.0",
     allowedHosts: true,
   },
 });
