@@ -62,6 +62,9 @@ export interface AppUser {
   passkeyEnrolled: boolean;
   dataConsentGiven: boolean;
   biometricConsentGiven: boolean;
+  parentConsentPending: boolean;
+  trainingConsentGiven: boolean;
+  contentPersonalizationConsentGiven: boolean;
   subscriptionPlan: string;
 }
 
@@ -80,15 +83,72 @@ export async function primeCsrfCookie(): Promise<void> {
   await request("/auth/me").catch(() => {});
 }
 
+// Every consent is whatever the person ticked on the sign-up screen; nothing is assumed on their
+// behalf. dataConsent must be true for the server to create the account, and it is the person's
+// own tick that makes it so.
+export interface RegisterInput {
+  email: string;
+  name: string;
+  password: string;
+  dateOfBirth: string;
+  parentGuardianEmail?: string;
+  dataConsent: boolean;
+  trainingConsent: boolean;
+  privacyPolicyVersion: string;
+}
+
 export async function register(
-  email: string,
-  name: string,
-  password: string,
-): Promise<{ user: AppUser }> {
-  return request("/auth/register", {
+  input: RegisterInput,
+): Promise<{ user: AppUser; devParentConsentLink?: string | null }> {
+  return request("/auth/register", { method: "POST", body: input });
+}
+
+// Privacy rights (policy sections 11 and 13), the same endpoints the web app uses.
+export interface PrivacyPolicyStatus {
+  currentVersion: string;
+  acknowledgedVersion: string | null;
+  acknowledgedAt: string | null;
+}
+
+export async function getPrivacyPolicyStatus(): Promise<PrivacyPolicyStatus> {
+  return request("/users/me/privacy-policy");
+}
+
+export async function acknowledgePrivacyPolicy(
+  version: string,
+): Promise<PrivacyPolicyStatus> {
+  return request("/users/me/privacy-policy/acknowledge", {
     method: "POST",
-    body: { email, name, password, dataConsent: true },
+    body: { version },
   });
+}
+
+export async function setTrainingConsent(consent: boolean): Promise<AppUser> {
+  return request("/users/me/training-consent", {
+    method: "POST",
+    body: { consent },
+  });
+}
+
+export async function setContentPersonalizationConsent(
+  consent: boolean,
+): Promise<AppUser> {
+  return request("/users/me/content-personalization-consent", {
+    method: "POST",
+    body: { consent },
+  });
+}
+
+/** The whole export as text, so it can be written to a file and shared. */
+export async function exportMyData(): Promise<string> {
+  return JSON.stringify(await request<unknown>("/users/me/export"), null, 2);
+}
+
+export async function deleteMyAccount(
+  userId: number,
+  password: string,
+): Promise<void> {
+  await request(`/users/${userId}`, { method: "DELETE", body: { password } });
 }
 
 export async function login(

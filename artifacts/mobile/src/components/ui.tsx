@@ -237,6 +237,60 @@ export function SectionNote({
   );
 }
 
+/** A tick box with its label, for consent: unticked unless the person ticks it. */
+export function CheckRow({
+  checked,
+  onChange,
+  children,
+  testID,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  children: React.ReactNode;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      onPress={() => onChange(!checked)}
+      style={checkStyles.row}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      testID={testID}
+    >
+      <View style={[checkStyles.box, checked && checkStyles.boxChecked]}>
+        {checked ? <Text style={checkStyles.tick}>✓</Text> : null}
+      </View>
+      <Text style={checkStyles.label}>{children}</Text>
+    </Pressable>
+  );
+}
+
+const checkStyles = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  box: {
+    width: 20,
+    height: 20,
+    marginTop: 1,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  boxChecked: { backgroundColor: colors.primary },
+  tick: {
+    color: colors.primaryForeground,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 15,
+  },
+  label: {
+    flex: 1,
+    color: colors.mutedForeground,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+});
+
 export function ShieldBadge({ size = 64 }: { size?: number }) {
   const pulse = useRef(new Animated.Value(0.6)).current;
   useEffect(() => {

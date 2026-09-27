@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,9 @@ import { ThreatsScreen } from "../screens/ThreatsScreen";
 import { PaymentsScreen } from "../screens/PaymentsScreen";
 import { UploadsScreen } from "../screens/UploadsScreen";
 import { DataProtectionScreen } from "../screens/DataProtectionScreen";
+import { PrivacyScreen } from "../screens/PrivacyScreen";
+import { getPrivacyPolicyStatus } from "../lib/api";
+import { PRIVACY_POLICY_VERSION } from "../config";
 
 type ScreenKey =
   | "dashboard"
@@ -24,7 +27,8 @@ type ScreenKey =
   | "threats"
   | "payments"
   | "uploads"
-  | "data-protection";
+  | "data-protection"
+  | "privacy";
 
 interface NavItem {
   key: ScreenKey;
@@ -53,6 +57,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "payments", label: "Financial Ledger", visible: () => true },
   { key: "uploads", label: "Data Vault", visible: () => true },
   { key: "data-protection", label: "Data Protection", visible: () => true },
+  { key: "privacy", label: "Privacy & Your Data", visible: () => true },
 ];
 
 const SCREENS: Record<ScreenKey, React.ComponentType> = {
@@ -63,12 +68,23 @@ const SCREENS: Record<ScreenKey, React.ComponentType> = {
   payments: PaymentsScreen,
   uploads: UploadsScreen,
   "data-protection": DataProtectionScreen,
+  privacy: PrivacyScreen,
 };
 
 export function AppShell() {
   const { user } = useAuth();
   const [screen, setScreen] = useState<ScreenKey>("dashboard");
   const [menuOpen, setMenuOpen] = useState(false);
+  // Policy section 13: signed-in people are told when the policy changes. Re-checked whenever
+  // the screen changes, so acknowledging on the Privacy screen clears the banner.
+  const [policyOutdated, setPolicyOutdated] = useState(false);
+  useEffect(() => {
+    getPrivacyPolicyStatus()
+      .then((s) =>
+        setPolicyOutdated(s.acknowledgedVersion !== PRIVACY_POLICY_VERSION),
+      )
+      .catch(() => setPolicyOutdated(false));
+  }, [screen]);
 
   const items = NAV_ITEMS.filter((item) => item.visible(user?.role));
   const activeLabel =
@@ -87,6 +103,19 @@ export function AppShell() {
           <Text style={styles.menuIcon}>≡</Text>
         </Pressable>
       </View>
+
+      {policyOutdated && screen !== "privacy" ? (
+        <Pressable
+          style={styles.policyBanner}
+          onPress={() => setScreen("privacy")}
+          testID="privacy-policy-notice"
+        >
+          <Text style={styles.policyBannerText}>
+            Our Privacy Policy has changed, or you haven't read it yet. Tap to
+            review it.
+          </Text>
+        </Pressable>
+      ) : null}
 
       <View style={styles.body}>
         <Screen />
@@ -158,6 +187,15 @@ const styles = StyleSheet.create({
   menuButton: { padding: 4 },
   menuIcon: { color: colors.primary, fontSize: 26, fontFamily: fonts.mono },
   body: { flex: 1 },
+  policyBanner: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: `${colors.primary}66`,
+    backgroundColor: `${colors.primary}14`,
+  },
+  policyBannerText: { color: colors.foreground, fontSize: 12, lineHeight: 17 },
   backdrop: { flex: 1, backgroundColor: "#000000A0", flexDirection: "row" },
   menuPanel: {
     width: "72%",

@@ -144,8 +144,14 @@ export async function downloadAndShare(upload: UploadContent): Promise<void> {
   await FileSystem.writeAsStringAsync(dest, upload.dataBase64, {
     encoding: FileSystem.EncodingType.Base64,
   });
-  const canShare = await Sharing.isAvailableAsync();
-  if (canShare) {
-    await Sharing.shareAsync(dest, { mimeType: upload.mimeType });
+  try {
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(dest, { mimeType: upload.mimeType });
+    }
+  } finally {
+    // The file is stored encrypted on the server; once the share sheet has closed, don't leave
+    // a decrypted copy in the app's cache (MASVS-STORAGE-1).
+    await FileSystem.deleteAsync(dest, { idempotent: true }).catch(() => {});
   }
 }
