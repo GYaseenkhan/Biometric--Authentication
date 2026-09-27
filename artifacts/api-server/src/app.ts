@@ -9,6 +9,7 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { isAllowedOrigin } from "./lib/allowedOrigins";
 import { issueCsrfCookie, requireCsrfMatch } from "./middlewares/csrf";
+import { rejectNulCharacters } from "./middlewares/rejectNulCharacters";
 import { IDLE_TIMEOUT_MS, ABSOLUTE_SESSION_MAX_MS } from "./lib/sessionPolicy";
 import { CLOUDFRONT_RANGES } from "./lib/cloudfrontRanges";
 
@@ -205,6 +206,7 @@ app.use(
 );
 app.use(express.json({ limit: "256kb", verify: jsonBodyVerify }));
 app.use(express.urlencoded({ extended: true }));
+app.use(rejectNulCharacters);
 app.use(cookieParser());
 app.use(issueCsrfCookie);
 // Webhooks are server-to-server (no browser, no cookies) and are validated
@@ -239,14 +241,13 @@ app.use(
     cookie: {
       httpOnly: true,
       secure: process.env["NODE_ENV"] === "production",
-      // "lax" works for local dev (frontend and API share an origin via the
-      // Vite proxy, or at worst share a scheme+port pattern). A split
-      // deployment (frontend on Vercel, API on Render — different domains
-      // entirely) is genuinely cross-site, and browsers won't attach a
-      // "lax" cookie to a cross-site fetch. "none" is required there, which
-      // in turn requires Secure (already true in production) — browsers
-      // reject SameSite=None without it.
-      sameSite: process.env["NODE_ENV"] === "production" ? "none" : "lax",
+      // Lax, in production too: the web app and the API share one origin (CloudFront serves the
+      // pages and routes /api to the API), so the browser never needs to send this cookie
+      // cross-site, and Lax means a cross-site POST arrives without it at all, underneath the
+      // CSRF token check. It was "none" for an earlier split deployment (web on Vercel, API on
+      // Render); the ZAP scan of 2026-09-27 flagged it. The mobile app's native cookie store
+      // doesn't apply SameSite, so it is unaffected.
+      sameSite: "lax",
       maxAge: IDLE_TIMEOUT_MS,
     },
   }),

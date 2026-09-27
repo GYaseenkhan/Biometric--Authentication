@@ -26,9 +26,10 @@ export function issueCsrfCookie(
     res.cookie(CSRF_COOKIE, token, {
       httpOnly: false,
       secure: process.env["NODE_ENV"] === "production",
-      // A split deployment (frontend and API on different domains) needs
-      // "none", which requires Secure.
-      sameSite: process.env["NODE_ENV"] === "production" ? "none" : "lax",
+      // Lax: the web app and the API share one origin (CloudFront serves the pages and routes /api
+      // to the API), so nothing needs this cookie cross-site. It was "none" for an earlier split
+      // deployment on two domains; the ZAP scan of 2026-09-27 flagged it.
+      sameSite: "lax",
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days — independent of session lifetime
     });
   }

@@ -1,5 +1,6 @@
 // Builds the web app and deploys it to Amplify Hosting (manual-deploy branch), then confirms the live
-// site serves the new build through CloudFront.
+// site serves the new build through CloudFront, with the security headers from
+// web-security-headers.mjs (set as the Amplify app's custom headers before deploying).
 //
 //   node scripts/ops/deploy-web.mjs                 build, check, deploy, verify
 //   node scripts/ops/deploy-web.mjs --package-only  build, check and zip; deploy nothing
@@ -12,6 +13,10 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { directoryEntries, writeZip } from "./lib/zip.mjs";
+import {
+  WEB_SECURITY_HEADERS,
+  amplifyCustomHeadersYaml,
+} from "./web-security-headers.mjs";
 
 const APP_ID = "d1cc0z06pe6l9z";
 const BRANCH = "main";
@@ -82,6 +87,24 @@ try {
       fail(`${f} is missing from the build`);
   }
   ok("noise texture and face-model files present");
+  const css = fs
+    .readdirSync(path.join(dist, "assets"))
+    .filter((f) => f.endsWith(".css"))
+    .map((f) => fs.readFileSync(path.join(dist, "assets", f), "utf8"))
+    .join("\n");
+  // The Content-Security-Policy only allows this site's own origin; anything fetched from elsewhere
+  // would be blocked on the live site.
+  if (/fonts\.(googleapis|gstatic)\.com/.test(html + css))
+    fail(
+      "the build loads fonts from Google, which the Content-Security-Policy blocks; bundle them (@fontsource)",
+    );
+  if (/url\(\s*["']?data:font/.test(css))
+    fail(
+      "the build inlines fonts as data: URIs, which the CSP (font-src 'self') blocks; see assetsInlineLimit in vite.config.ts",
+    );
+  ok(
+    "no third-party or inlined fonts (the CSP allows only files from this site)",
+  );
 
   step("Packaging");
   const entries = directoryEntries(dist);
@@ -93,6 +116,35 @@ try {
   if (PACKAGE_ONLY) {
     step(`--package-only: nothing deployed. The zip is kept at ${zipFile}.`);
   } else {
+    step("Security headers on the Amplify app");
+    const wanted = amplifyCustomHeadersYaml();
+    const current = aws(
+      `amplify get-app --app-id ${APP_ID} --query "app.customHeaders" --output text`,
+    );
+    if (current.trim() === wanted.trim()) {
+      ok("already set");
+    } else {
+      // Through a JSON file: the multi-line YAML doesn't survive command-line quoting on Windows.
+      const input = path.join(
+        os.tmpdir(),
+        `secureai-headers-${Date.now()}.json`,
+      );
+      fs.writeFileSync(
+        input,
+        JSON.stringify({ appId: APP_ID, customHeaders: wanted }),
+      );
+      try {
+        aws(
+          `amplify update-app --cli-input-json "file://${input.replaceAll("\\", "/")}"`,
+        );
+      } finally {
+        fs.rmSync(input, { force: true });
+      }
+      ok(
+        `set ${Object.keys(WEB_SECURITY_HEADERS).length} headers (they take effect with this deployment)`,
+      );
+    }
+
     step(`Deploying to Amplify (${APP_ID}/${BRANCH})`);
     const { jobId, zipUploadUrl } = JSON.parse(
       aws(
@@ -137,6 +189,19 @@ try {
     const asset = await fetch(`${LIVE}${expected}`);
     if (!asset.ok) fail(`${LIVE}${expected} answered ${asset.status}`);
     ok(`${LIVE}/ serves ${expected}`);
+
+    step("Confirming the live pages carry the security headers");
+    const live = await fetch(`${LIVE}/privacy`, { cache: "no-store" });
+    const missing = Object.entries(WEB_SECURITY_HEADERS).filter(
+      ([name, value]) => live.headers.get(name) !== value,
+    );
+    if (missing.length)
+      fail(
+        `${LIVE}/privacy is missing or has a different ${missing.map(([n]) => n).join(", ")}. CloudFront may still hold the old copy; re-check in a few minutes`,
+      );
+    ok(
+      `all ${Object.keys(WEB_SECURITY_HEADERS).length} present, including the Content-Security-Policy`,
+    );
     fs.rmSync(zipFile, { force: true });
   }
 } catch (e) {

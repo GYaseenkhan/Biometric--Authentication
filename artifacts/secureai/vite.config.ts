@@ -44,6 +44,10 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Fonts are always separate files, never inlined as data: URIs, which the site's
+    // Content-Security-Policy (font-src 'self') would block (scripts/ops/web-security-headers.mjs).
+    assetsInlineLimit: (file) =>
+      /\.(woff2?|ttf|otf)$/.test(file) ? false : undefined,
   },
   server: {
     port,
