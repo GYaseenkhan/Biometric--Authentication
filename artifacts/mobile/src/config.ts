@@ -42,3 +42,13 @@ export const APP_ORIGIN =
 export const PRIVACY_POLICY_URL =
   process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL ??
   "https://d2zb1uxt99m5ks.cloudfront.net/privacy";
+
+// The policy version the sign-up screen points to. Must equal the web text's version and the
+// API's PRIVACY_POLICY_VERSION (CI checks all three: scripts/check-privacy-policy-version.mjs).
+// An older build sending an older version is harmless: the API records an acknowledgement only
+// for the current version, and otherwise asks the person to review the policy after signing in.
+export const PRIVACY_POLICY_VERSION = "2026-09-26.2";
+
+// Must match MINOR_CONSENT_AGE_THRESHOLD in api-server's auth.ts. Only decides whether to show
+// the guardian field; the server recomputes age from the date of birth.
+export const MINOR_CONSENT_AGE_THRESHOLD = 18;
