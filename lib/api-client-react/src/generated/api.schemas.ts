@@ -116,7 +116,10 @@ export interface User {
 export interface UserRegistration {
   /** @maxLength 254 */
   email: string;
-  /** @minLength 1 */
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
   name: string;
   /** @minLength 8 */
   password: string;
@@ -197,7 +200,10 @@ export const UserUpdateRole = {
 } as const;
 
 export interface UserUpdate {
-  /** @minLength 1 */
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
   name?: string;
   role?: UserUpdateRole;
 }

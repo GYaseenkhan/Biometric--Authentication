@@ -36,6 +36,7 @@ import {
 import { FaceCamera } from "../components/FaceCamera";
 import { AiLabel } from "../components/AiLabel";
 import { DownloadMyData } from "../components/DownloadMyData";
+import { YourDetails } from "../components/YourDetails";
 import {
   enrollPasskey,
   listPasskeys,
@@ -403,11 +404,20 @@ export default function Enroll() {
   // Separate from biometric/data consent — toggleable any time, takes effect
   // on the very next prediction (nothing is trained ahead of time and kept
   // around, see behaviorModel.ts).
+  // The save returns the updated account; showing that directly (rather than re-fetching) means an
+  // older fetch still in flight can't land afterwards and put the tick box back.
+  const showSavedUser = async (saved: unknown) => {
+    const key = getGetCurrentUserQueryKey();
+    await queryClient.cancelQueries({ queryKey: key });
+    queryClient.setQueryData(key, saved);
+  };
+
   const handleToggleTrainingConsent = async (consent: boolean) => {
     setTrainingConsentError("");
     try {
-      await trainingConsentMutation.mutateAsync({ data: { consent } });
-      await refetchUser();
+      await showSavedUser(
+        await trainingConsentMutation.mutateAsync({ data: { consent } }),
+      );
     } catch (err: any) {
       setTrainingConsentError(
         err?.data?.error || "Failed to update training consent.",
@@ -424,8 +434,9 @@ export default function Enroll() {
   const handleToggleContentConsent = async (consent: boolean) => {
     setContentConsentError("");
     try {
-      await contentConsentMutation.mutateAsync({ data: { consent } });
-      await refetchUser();
+      await showSavedUser(
+        await contentConsentMutation.mutateAsync({ data: { consent } }),
+      );
       await queryClient.invalidateQueries({
         queryKey: getGetContentProfileQueryKey(),
       });
@@ -736,6 +747,16 @@ export default function Enroll() {
           >
             <LogOut className="w-4 h-4 mr-2" /> Sign Out of All Devices
           </Button>
+        </Card>
+
+        <Card className="border-t-4 border-t-primary bg-card/50 backdrop-blur-sm space-y-4">
+          <div className="flex items-center gap-3">
+            <FileText className="w-5 h-5 text-primary" />
+            <h2 className="font-mono font-bold uppercase tracking-widest text-foreground">
+              Your Details
+            </h2>
+          </div>
+          <YourDetails />
         </Card>
 
         <Card className="border-t-4 border-t-primary bg-card/50 backdrop-blur-sm space-y-4">

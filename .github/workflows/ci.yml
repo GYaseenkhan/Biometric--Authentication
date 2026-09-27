@@ -34,6 +34,9 @@ jobs:
       # The ClamAV client against a fake clamd: INSTREAM framing, and an
       # unreachable or confused scanner never being read as "clean".
       - run: pnpm --filter @workspace/api-server run verify:clamd
+      # The encryption keyring: data stays readable through a key change, a dropped or
+      # relabelled key fails loudly, and SESSION_SECRET stops opening data after the move.
+      - run: pnpm --filter @workspace/api-server run verify:keyring
       # The deploy hook that installs ClamAV on the API instance.
       - run: shellcheck artifacts/api-server/.platform/hooks/prebuild/10_clamav.sh
       # The privacy policy text and the version the API records must match.

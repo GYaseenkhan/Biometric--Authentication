@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { seedIfEmpty } from "./lib/seed";
 import { startRetentionJob } from "./lib/retention";
+import { startKeyRotationJob } from "./lib/keyRotation";
 import { startSecurityAlertingJob } from "./lib/securityAlerting";
 import { ensureDeletionAuditTrigger } from "./lib/dbBootstrap";
 import { logClamdStatusAtStartup } from "./lib/clamdClient";
@@ -38,6 +39,7 @@ app.listen(port, async (err) => {
   }
 
   startRetentionJob();
+  startKeyRotationJob();
   startSecurityAlertingJob();
   void logClamdStatusAtStartup(logger);
 });
