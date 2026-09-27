@@ -22,6 +22,7 @@ export const HealthCheckResponse = zod.object({
  */
 export const registerUserBodyEmailMax = 254;
 
+export const registerUserBodyNameMax = 100;
 
 export const registerUserBodyPasswordMin = 8;
 
@@ -34,7 +35,7 @@ export const registerUserBodyPrivacyPolicyVersionMax = 32;
 
 export const RegisterUserBody = zod.object({
   "email": zod.string().email().max(registerUserBodyEmailMax),
-  "name": zod.string().min(1),
+  "name": zod.string().min(1).max(registerUserBodyNameMax),
   "password": zod.string().min(registerUserBodyPasswordMin),
   "dataConsent": zod.boolean().describe('Must be true — explicit consent to processing of account\/profile data. Registration is rejected without it.'),
   "dateOfBirth": zod.string().describe('Self-reported, ISO date (YYYY-MM-DD). Used server-side to compute age at registration — never trust a client-computed \"is adult\" boolean, same principle as everywhere else consent\/verification is enforced in this app.'),
@@ -299,11 +300,12 @@ export const UpdateUserParams = zod.object({
   "id": zod.coerce.number().int().min(1).max(updateUserPathIdMax)
 })
 
+export const updateUserBodyNameMax = 100;
 
 
 
 export const UpdateUserBody = zod.object({
-  "name": zod.string().min(1).optional(),
+  "name": zod.string().min(1).max(updateUserBodyNameMax).optional(),
   "role": zod.enum(['user', 'admin', 'security_analyst', 'it_support']).optional()
 })
 

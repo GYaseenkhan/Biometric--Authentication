@@ -39,6 +39,7 @@ import { requireParentConsent } from "../middlewares/requireParentConsent";
 import { encryptJson } from "../lib/fileEncryption";
 import { hashResetToken, RESET_TOKEN_TTL_MS } from "./auth";
 import { devAuthLinksEnabled } from "../lib/devLinks";
+import { getClientIp } from "../lib/clientIp";
 
 const router: IRouter = Router();
 
@@ -164,7 +165,7 @@ router.patch(
     }
 
     const [sessionUser] = await db
-      .select({ role: usersTable.role })
+      .select({ role: usersTable.role, email: usersTable.email })
       .from(usersTable)
       .where(eq(usersTable.id, sessionUserId));
     const isAdmin = sessionUser?.role === "admin";
@@ -187,25 +188,59 @@ router.patch(
     }
 
     const updates: Partial<{ name: string; role: Role }> = {};
-    if (body.data.name) updates.name = body.data.name;
+    const name = body.data.name?.trim();
+    if (body.data.name !== undefined && !name) {
+      res.status(400).json({ error: "Name can't be blank" });
+      return;
+    }
+    if (name) updates.name = name;
     if (body.data.role) updates.role = body.data.role;
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: "Nothing to update" });
+      return;
+    }
 
+    const [before] = await db
+      .select({ role: usersTable.role, name: usersTable.name })
+      .from(usersTable)
+      .where(eq(usersTable.id, params.data.id));
     const [user] = await db
       .update(usersTable)
       .set(updates)
       .where(eq(usersTable.id, params.data.id))
       .returning();
-    if (!user) {
+    if (!user || !before) {
       res.status(404).json({ error: "User not found" });
       return;
     }
 
-    await logEvent({
-      eventType: "USER_UPDATED",
-      details: `User ${user.email} updated`,
-      userId: sessionUserId,
-      userEmail: user.email,
-    });
+    // A privilege change is its own event, naming the old and new role and who made it, so the
+    // audit log answers "who gave this account admin, and when" (brief §5: privilege changes).
+    // The name itself stays out of the log; only the fact that it changed is recorded.
+    const actor =
+      sessionUserId === user.id
+        ? "themselves"
+        : `admin ${sessionUser?.email ?? sessionUserId}`;
+    if (updates.role && updates.role !== before.role) {
+      await logEvent({
+        eventType: "ROLE_CHANGED",
+        details: `Role of ${user.email} changed from ${before.role} to ${user.role} by ${actor}`,
+        userId: sessionUserId,
+        userEmail: user.email,
+        ipAddress: getClientIp(req),
+        userAgent: req.headers["user-agent"],
+      });
+    }
+    if (updates.name && updates.name !== before.name) {
+      await logEvent({
+        eventType: "USER_UPDATED",
+        details: `Name of ${user.email} changed by ${actor}`,
+        userId: sessionUserId,
+        userEmail: user.email,
+        ipAddress: getClientIp(req),
+        userAgent: req.headers["user-agent"],
+      });
+    }
     res.json(UpdateUserResponse.parse(await mapUser(user)));
   },
 );
@@ -246,12 +281,10 @@ router.delete(
         password &&
         (await bcrypt.compare(password, sessionUser?.passwordHash ?? ""));
       if (!passwordValid) {
-        res
-          .status(401)
-          .json({
-            error:
-              "Incorrect password — re-enter your password to confirm account deletion",
-          });
+        res.status(401).json({
+          error:
+            "Incorrect password — re-enter your password to confirm account deletion",
+        });
         return;
       }
     }

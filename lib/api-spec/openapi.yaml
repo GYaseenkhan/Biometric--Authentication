@@ -1610,6 +1610,7 @@ components:
         name:
           type: string
           minLength: 1
+          maxLength: 100
         password:
           type: string
           minLength: 8
@@ -1713,6 +1714,7 @@ components:
         name:
           type: string
           minLength: 1
+          maxLength: 100
         role:
           type: string
           enum: [user, admin, security_analyst, it_support]

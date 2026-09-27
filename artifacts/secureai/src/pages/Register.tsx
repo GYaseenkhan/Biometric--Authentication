@@ -154,6 +154,7 @@ export default function Register() {
               <Label htmlFor="name">Full Designation (Name)</Label>
               <Input
                 id="name"
+                maxLength={100}
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
