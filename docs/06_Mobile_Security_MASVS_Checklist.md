@@ -19,12 +19,13 @@ scope).
 
 ## MASVS-STORAGE — sensitive data at rest on the device
 
-| Control                                                             | Status | Detail                                                                                                                                                                                                         |
-| ------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No sensitive data in shared/world-readable storage                  | Met    | No `AsyncStorage`, no plain-file writes of session/credential data anywhere in `artifacts/mobile/src` — verified by grep, not just design intent                                                               |
-| Session/auth tokens stored via a secure mechanism                   | Met    | Session lives entirely in the native cookie jar (`@react-native-cookies/cookies`, backed by the OS's own HTTP stack), the same mechanism a mobile browser uses — never touches app-controlled storage          |
-| Cryptographic keys stored in hardware-backed storage, not app files | Met    | The biometric signing key lives in Android Keystore (`react-native-biometrics`), hardware-backed on any device with StrongBox/TEE support — the app never sees the private key material, only signature output |
-| No sensitive data in logs                                           | Met    | No `console.log`/logging of descriptors, tokens, or passwords in the mobile client; mirrors the same audit already done server-side for `logEvent` call sites (`04`, Logging section)                          |
+| Control                                                             | Status | Detail                                                                                                                                                                                                             |
+| ------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No sensitive data in shared/world-readable storage                  | Met    | No `AsyncStorage`, no plain-file writes of session/credential data anywhere in `artifacts/mobile/src` — verified by grep, not just design intent                                                                   |
+| Session/auth tokens stored via a secure mechanism                   | Met    | Session lives entirely in the native cookie jar (`@react-native-cookies/cookies`, backed by the OS's own HTTP stack), the same mechanism a mobile browser uses — never touches app-controlled storage              |
+| Cryptographic keys stored in hardware-backed storage, not app files | Met    | The biometric signing key lives in Android Keystore (`react-native-biometrics`), hardware-backed on any device with StrongBox/TEE support — the app never sees the private key material, only signature output     |
+| No decrypted copies left on the device                              | Met    | Added 2026-09-27. A downloaded upload and a data export are written to the app's cache only to hand them to the share sheet, and deleted when it closes; before, a downloaded upload stayed in the cache decrypted |
+| No sensitive data in logs                                           | Met    | No `console.log`/logging of descriptors, tokens, or passwords in the mobile client; mirrors the same audit already done server-side for `logEvent` call sites (`04`, Logging section)                              |
 
 ## MASVS-CRYPTO — cryptography
 
@@ -81,20 +82,22 @@ scope).
 | Control                                      | Status | Detail                                                                                                                                                                                                                                                                                                               |
 | -------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | No biometric data leaves the device          | Met    | Same device-native guarantee as the brief's core scope decision — the biometric never reaches this app's server at all, mobile or web (the Keystore path is _more_ conservative than the web app's face-descriptor path, which does store an encrypted template server-side — see `04`'s documented scope deviation) |
+| Consent asked, never assumed                 | Met    | Fixed 2026-09-27 (R-CONSENT-4): sign-up sent `dataConsent: true` without showing anything. It now shows the data consent as an unticked box, the optional training consent, and the privacy policy, like the web                                                                                                     |
+| Privacy rights available in the app          | Met    | Added 2026-09-27: Privacy & Your Data screen: acknowledge the policy (banner when it changes), change the optional consents, download a copy of your data, delete the account                                                                                                                                        |
 | Data minimization in what's requested/stored | Met    | No location, contacts, or media-library-wide access requested; upload feature uses `expo-document-picker`'s scoped file picker, not broad storage access                                                                                                                                                             |
 
 ## Summary
 
 | Category   | Met | Partial | Gap | N/A |
 | ---------- | --- | ------- | --- | --- |
-| STORAGE    | 4   | 0       | 0   | 0   |
+| STORAGE    | 5   | 0       | 0   | 0   |
 | CRYPTO     | 2   | 0       | 0   | 0   |
 | AUTH       | 5   | 0       | 0   | 0   |
 | NETWORK    | 4   | 0       | 0   | 0   |
 | PLATFORM   | 2   | 1       | 0   | 0   |
 | CODE       | 3   | 0       | 0   | 0   |
 | RESILIENCE | 0   | 0       | 3   | 0   |
-| PRIVACY    | 2   | 0       | 0   | 0   |
+| PRIVACY    | 4   | 0       | 0   | 0   |
 
 The RESILIENCE category is the honest weak point — anti-tampering/root-detection is the one MASVS
 category with zero coverage, consistent with this being a PoC rather than a hardened release build. Every

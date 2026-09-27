@@ -69,9 +69,10 @@ flowchart TB
 - CSRF sits in front of the MFA gate, not behind it: a forged cross-site request can't even reach a
   route handler without a matching `X-CSRF-Token`, regardless of MFA state.
 - Encryption and audit logging are library calls used _by_ route handlers, not a separate service —
-  there's no key-management service or external HSM in this PoC. `FILE_ENCRYPTION_KEY` is a single
-  symmetric key from environment config. That's an accepted limitation of a demo, documented as such
-  (see `04_Threat_Model_Risk_Assessment.md`, R-DP-3).
+  there's no key-management service or external HSM in this PoC. Data at rest is encrypted under a keyring
+  (`lib/fileEncryption.ts`): each stored value records which key encrypted it, so the key can be replaced
+  and older values re-encrypted in the background (`lib/keyRotation.ts`). The keys are environment
+  config, not a KMS or HSM (see `04_Threat_Model_Risk_Assessment.md`, R-DP-3).
 - The payment provider is simulated: no real Stripe (or equivalent) integration exists; the webhook
   signature verification path is real and independently testable (`lib/webhookSignature.ts`), but nothing
   in this PoC actually calls out to a payment network.

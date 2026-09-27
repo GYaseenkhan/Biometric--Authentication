@@ -463,3 +463,13 @@ corrected by Team 1 so every statement matches the app; the corrections are list
   Available from Security Settings and the policy page.
 - **Open to every signed-in account**, like consent withdrawal (R-CONSENT-2): an account still setting up
   sign-in or awaiting a parent can read, acknowledge and export.
+- **Correcting your details (APP 13; added 2026-09-27).** Security Settings has a Your Details form to change
+  the name on the account (1 to 100 characters, audited as "Name of x changed by themselves", without the
+  name). The email address is the sign-in identity, so changing it goes through us, as the policy says (R-PRIV-3).
+- **Mobile (added 2026-09-27).** Until then the mobile sign-up sent `dataConsent: true` without asking and
+  no date of birth, so it both claimed a consent nobody gave and failed on every attempt (R-CONSENT-4). It
+  now asks exactly what the web form asks: date of birth (and a guardian's email under 18), the data
+  consent as an unticked box, the optional training consent, and the policy, whose version it sends. The
+  Privacy & Your Data screen gives mobile the same rights: read and acknowledge the policy (a banner
+  appears when it changes), change the optional consents, download a copy of your data, delete the
+  account. CI checks the policy version is the same in the web text, the mobile app and the API.
