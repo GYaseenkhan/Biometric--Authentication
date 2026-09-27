@@ -197,12 +197,10 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       userAgent: req.headers["user-agent"],
     });
     res.set("Retry-After", String(ipReservation.retryAfterSeconds ?? 3600));
-    res
-      .status(429)
-      .json({
-        error:
-          "Too many registration attempts from this network — please try again later",
-      });
+    res.status(429).json({
+      error:
+        "Too many registration attempts from this network — please try again later",
+    });
     return;
   }
 
@@ -243,11 +241,9 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   }
   const isMinor = age < MINOR_CONSENT_AGE_THRESHOLD;
   if (isMinor && !parentGuardianEmail?.trim()) {
-    res
-      .status(400)
-      .json({
-        error: `A parent/guardian email is required to register under age ${MINOR_CONSENT_AGE_THRESHOLD}`,
-      });
+    res.status(400).json({
+      error: `A parent/guardian email is required to register under age ${MINOR_CONSENT_AGE_THRESHOLD}`,
+    });
     return;
   }
 
@@ -458,11 +454,9 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       userAgent: req.headers["user-agent"],
     });
     res.set("Retry-After", String(retryAfterSeconds));
-    res
-      .status(429)
-      .json({
-        error: "Too many failed login attempts — please try again later",
-      });
+    res.status(429).json({
+      error: "Too many failed login attempts — please try again later",
+    });
     return;
   }
 
@@ -646,12 +640,10 @@ router.post("/auth/face-verify", async (req, res): Promise<void> => {
       try {
         await destroySession(req);
       } catch {
-        res
-          .status(500)
-          .json({
-            error:
-              "Could not invalidate the expired challenge — please try again",
-          });
+        res.status(500).json({
+          error:
+            "Could not invalidate the expired challenge — please try again",
+        });
         return;
       }
       await logEvent({
@@ -704,11 +696,9 @@ router.post("/auth/face-verify", async (req, res): Promise<void> => {
           ])
         : [[], []];
       if (userPasskeys.length > 0 || userBiometricKeys.length > 0) {
-        res
-          .status(400)
-          .json({
-            error: "Face not enrolled — use your device passkey instead",
-          });
+        res.status(400).json({
+          error: "Face not enrolled — use your device passkey instead",
+        });
         return;
       }
       await destroySession(req).catch(() => {});
@@ -734,11 +724,9 @@ router.post("/auth/face-verify", async (req, res): Promise<void> => {
         try {
           await destroySession(req);
         } catch {
-          res
-            .status(500)
-            .json({
-              error: "Could not invalidate the challenge — please try again",
-            });
+          res.status(500).json({
+            error: "Could not invalidate the challenge — please try again",
+          });
           return;
         }
         await logEvent({
@@ -758,11 +746,9 @@ router.post("/auth/face-verify", async (req, res): Promise<void> => {
       try {
         await saveSession(req);
       } catch {
-        res
-          .status(500)
-          .json({
-            error: "Could not record the failed attempt — please try again",
-          });
+        res.status(500).json({
+          error: "Could not record the failed attempt — please try again",
+        });
         return;
       }
       await logEvent({
@@ -774,11 +760,9 @@ router.post("/auth/face-verify", async (req, res): Promise<void> => {
         userAgent: req.headers["user-agent"],
       });
       // Says an AI model made the call and what to do instead; never the match distance, which would help an attacker probing the threshold.
-      res
-        .status(401)
-        .json({
-          error: `The face-matching model did not recognise this scan as your enrolled face. Face the camera in even light and try again, or use your passkey instead — ${MFA_MAX_ATTEMPTS - attempts} attempt(s) remaining`,
-        });
+      res.status(401).json({
+        error: `The face-matching model did not recognise this scan as your enrolled face. Face the camera in even light and try again, or use your passkey instead — ${MFA_MAX_ATTEMPTS - attempts} attempt(s) remaining`,
+      });
       return;
     }
 
@@ -850,11 +834,9 @@ router.post("/auth/forgot-password", async (req, res): Promise<void> => {
       userAgent: req.headers["user-agent"],
     });
     res.set("Retry-After", String(retryAfterSeconds));
-    res
-      .status(429)
-      .json({
-        error: "Too many password reset requests — please try again later",
-      });
+    res.status(429).json({
+      error: "Too many password reset requests — please try again later",
+    });
     return;
   }
 
@@ -1008,11 +990,9 @@ router.post("/auth/reset-password/face", async (req, res): Promise<void> => {
       ipAddress: ip,
       userAgent: req.headers["user-agent"],
     });
-    res
-      .status(401)
-      .json({
-        error: `The face-matching model did not recognise this scan as your enrolled face. Try again in even light, or verify with your passkey instead — ${RESET_MAX_ATTEMPTS - attempts} attempt(s) remaining`,
-      });
+    res.status(401).json({
+      error: `The face-matching model did not recognise this scan as your enrolled face. Try again in even light, or verify with your passkey instead — ${RESET_MAX_ATTEMPTS - attempts} attempt(s) remaining`,
+    });
     return;
   }
 

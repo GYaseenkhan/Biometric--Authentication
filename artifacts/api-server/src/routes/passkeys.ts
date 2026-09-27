@@ -95,12 +95,9 @@ async function pendingMfaValid(
     try {
       await destroySession(req);
     } catch {
-      res
-        .status(500)
-        .json({
-          error:
-            "Could not invalidate the expired challenge — please try again",
-        });
+      res.status(500).json({
+        error: "Could not invalidate the expired challenge — please try again",
+      });
       return false;
     }
     res
@@ -208,11 +205,9 @@ router.post(
       });
     } catch (e) {
       await saveSession(req).catch(() => {});
-      res
-        .status(400)
-        .json({
-          error: `Passkey verification failed: ${(e as Error).message}`,
-        });
+      res.status(400).json({
+        error: `Passkey verification failed: ${(e as Error).message}`,
+      });
       return;
     }
 

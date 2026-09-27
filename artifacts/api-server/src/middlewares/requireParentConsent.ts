@@ -33,13 +33,11 @@ export async function requireParentConsent(
   }
 
   if (user.parentGuardianEmail !== null && !user.parentConsentGiven) {
-    res
-      .status(403)
-      .json({
-        error:
-          "Parent/guardian consent is required before this account can be used",
-        code: "PARENT_CONSENT_REQUIRED",
-      });
+    res.status(403).json({
+      error:
+        "Parent/guardian consent is required before this account can be used",
+      code: "PARENT_CONSENT_REQUIRED",
+    });
     return;
   }
 

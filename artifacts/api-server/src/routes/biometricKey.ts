@@ -90,12 +90,9 @@ async function pendingMfaValid(
     try {
       await destroySession(req);
     } catch {
-      res
-        .status(500)
-        .json({
-          error:
-            "Could not invalidate the expired challenge — please try again",
-        });
+      res.status(500).json({
+        error: "Could not invalidate the expired challenge — please try again",
+      });
       return false;
     }
     res
@@ -381,11 +378,9 @@ router.post(
         ipAddress: ip,
         userAgent: req.headers["user-agent"],
       });
-      res
-        .status(429)
-        .json({
-          error: "Too many attempts — please slow down and try again shortly.",
-        });
+      res.status(429).json({
+        error: "Too many attempts — please slow down and try again shortly.",
+      });
       return;
     }
 

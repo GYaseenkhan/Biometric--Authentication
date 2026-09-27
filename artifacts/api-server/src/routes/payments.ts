@@ -174,14 +174,12 @@ router.post(
             userId,
             userEmail: user?.email,
           });
-          res
-            .status(201)
-            .json(
-              SubscribeResponse.parse({
-                payment: mapPayment(existing),
-                subscriptionPlan: user?.subscriptionPlan ?? plan.id,
-              }),
-            );
+          res.status(201).json(
+            SubscribeResponse.parse({
+              payment: mapPayment(existing),
+              subscriptionPlan: user?.subscriptionPlan ?? plan.id,
+            }),
+          );
           return;
         }
         // The key exists but belongs to someone else. Refuse without saying
@@ -194,12 +192,10 @@ router.post(
           userId,
           userEmail: user?.email,
         });
-        res
-          .status(409)
-          .json({
-            error:
-              "This Idempotency-Key has already been used. Use a new key for a new request.",
-          });
+        res.status(409).json({
+          error:
+            "This Idempotency-Key has already been used. Use a new key for a new request.",
+        });
         return;
       }
       throw err;
@@ -217,13 +213,11 @@ router.post(
         userId,
         userEmail: user?.email,
       });
-      res
-        .status(402)
-        .json({
-          error: decision.declineMessage,
-          declineCode: decision.declineCode,
-          payment: mapPayment(payment),
-        });
+      res.status(402).json({
+        error: decision.declineMessage,
+        declineCode: decision.declineCode,
+        payment: mapPayment(payment),
+      });
       return;
     }
 
@@ -355,12 +349,10 @@ router.post("/payments", paymentRateLimit, async (req, res): Promise<void> => {
         userId,
         userEmail: user?.email,
       });
-      res
-        .status(409)
-        .json({
-          error:
-            "This Idempotency-Key has already been used. Use a new key for a new request.",
-        });
+      res.status(409).json({
+        error:
+          "This Idempotency-Key has already been used. Use a new key for a new request.",
+      });
       return;
     }
     throw err;
@@ -378,13 +370,11 @@ router.post("/payments", paymentRateLimit, async (req, res): Promise<void> => {
       userId,
       userEmail: user?.email,
     });
-    res
-      .status(402)
-      .json({
-        error: decision.declineMessage,
-        declineCode: decision.declineCode,
-        payment: mapPayment(payment),
-      });
+    res.status(402).json({
+      error: decision.declineMessage,
+      declineCode: decision.declineCode,
+      payment: mapPayment(payment),
+    });
     return;
   }
 
@@ -430,32 +420,26 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
   }
 
   if (payment.status === "disputed" || payment.status === "charged_back") {
-    res
-      .status(409)
-      .json({
-        error:
-          payment.status === "disputed"
-            ? "This payment is in a chargeback dispute with the card issuer, so it can't also be refunded here."
-            : "This payment was already returned to the cardholder through a chargeback.",
-      });
+    res.status(409).json({
+      error:
+        payment.status === "disputed"
+          ? "This payment is in a chargeback dispute with the card issuer, so it can't also be refunded here."
+          : "This payment was already returned to the cardholder through a chargeback.",
+    });
     return;
   }
   if (payment.status !== "completed") {
-    res
-      .status(400)
-      .json({
-        error: `Only a completed payment can be refunded (current status: ${payment.status})`,
-      });
+    res.status(400).json({
+      error: `Only a completed payment can be refunded (current status: ${payment.status})`,
+    });
     return;
   }
 
   const ageMs = Date.now() - payment.createdAt.getTime();
   if (!isAdmin && ageMs > SELF_SERVICE_REFUND_WINDOW_MS) {
-    res
-      .status(400)
-      .json({
-        error: `This payment is outside the ${SELF_SERVICE_REFUND_WINDOW_MS / (24 * 60 * 60 * 1000)}-day self-service refund window — contact support`,
-      });
+    res.status(400).json({
+      error: `This payment is outside the ${SELF_SERVICE_REFUND_WINDOW_MS / (24 * 60 * 60 * 1000)}-day self-service refund window — contact support`,
+    });
     return;
   }
 
@@ -489,11 +473,9 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
     return row;
   });
   if (outcome === "limit") {
-    res
-      .status(409)
-      .json({
-        error: `Only ${SELF_SERVICE_SUBSCRIPTION_REFUNDS_PER_YEAR} subscription refund per year can be made here. Contact support to ask for another.`,
-      });
+    res.status(409).json({
+      error: `Only ${SELF_SERVICE_SUBSCRIPTION_REFUNDS_PER_YEAR} subscription refund per year can be made here. Contact support to ask for another.`,
+    });
     return;
   }
   const updated = outcome;
@@ -503,11 +485,9 @@ router.post("/payments/:id/refund", async (req, res): Promise<void> => {
       .select({ status: paymentsTable.status })
       .from(paymentsTable)
       .where(eq(paymentsTable.id, payment.id));
-    res
-      .status(400)
-      .json({
-        error: `Only a completed payment can be refunded (current status: ${current?.status ?? "unknown"})`,
-      });
+    res.status(400).json({
+      error: `Only a completed payment can be refunded (current status: ${current?.status ?? "unknown"})`,
+    });
     return;
   }
 

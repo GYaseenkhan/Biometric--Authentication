@@ -60,12 +60,10 @@ router.post(
       return;
     }
     if (parsed.data.version !== PRIVACY_POLICY_VERSION) {
-      res
-        .status(409)
-        .json({
-          error:
-            "The privacy policy has changed since this page loaded. Reload it to see the current version.",
-        });
+      res.status(409).json({
+        error:
+          "The privacy policy has changed since this page loaded. Reload it to see the current version.",
+      });
       return;
     }
     const [user] = await db
