@@ -56,12 +56,10 @@ export async function requireMfaEnrolled(
     .from(biometricKeysTable)
     .where(eq(biometricKeysTable.userId, userId));
   if (Number(biometricKeyCount?.count ?? 0) === 0) {
-    res
-      .status(403)
-      .json({
-        error: "Face, passkey, or device biometric key enrollment required",
-        code: "MFA_ENROLLMENT_REQUIRED",
-      });
+    res.status(403).json({
+      error: "Face, passkey, or device biometric key enrollment required",
+      code: "MFA_ENROLLMENT_REQUIRED",
+    });
     return;
   }
 

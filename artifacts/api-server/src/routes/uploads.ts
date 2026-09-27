@@ -115,12 +115,10 @@ router.post("/uploads", uploadRateLimit, async (req, res): Promise<void> => {
 
   const fileType = classifyMimeType(mimeType);
   if (!fileType) {
-    res
-      .status(400)
-      .json({
-        error:
-          "Unsupported file type — only text, image, video, and audio are allowed",
-      });
+    res.status(400).json({
+      error:
+        "Unsupported file type — only text, image, video, and audio are allowed",
+    });
     return;
   }
 
@@ -132,11 +130,9 @@ router.post("/uploads", uploadRateLimit, async (req, res): Promise<void> => {
     return;
   }
   if (plaintext.length === 0 || plaintext.length > MAX_UPLOAD_BYTES) {
-    res
-      .status(400)
-      .json({
-        error: `File must be between 1 byte and ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB`,
-      });
+    res.status(400).json({
+      error: `File must be between 1 byte and ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB`,
+    });
     return;
   }
 
@@ -156,12 +152,10 @@ router.post("/uploads", uploadRateLimit, async (req, res): Promise<void> => {
         userAgent: req.headers["user-agent"],
       });
       res.set("Retry-After", "60");
-      res
-        .status(503)
-        .json({
-          error:
-            "Virus scanning is temporarily unavailable, so the file wasn't saved. Try again in a minute.",
-        });
+      res.status(503).json({
+        error:
+          "Virus scanning is temporarily unavailable, so the file wasn't saved. Try again in a minute.",
+      });
       return;
     }
     if (!clamdScan.clean) {
@@ -202,12 +196,10 @@ router.post("/uploads", uploadRateLimit, async (req, res): Promise<void> => {
     // whatever subtype the client happened to declare.
     const detectedFormat = detectImageFormat(plaintext);
     if (!detectedFormat) {
-      res
-        .status(400)
-        .json({
-          error:
-            "File content does not look like a valid image (png, jpeg, gif, or webp)",
-        });
+      res.status(400).json({
+        error:
+          "File content does not look like a valid image (png, jpeg, gif, or webp)",
+      });
       return;
     }
     // Strip EXIF/GPS location and text metadata before it's ever encrypted and stored (brief: "strip photo location data").

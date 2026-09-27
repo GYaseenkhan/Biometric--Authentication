@@ -32,11 +32,9 @@ export function requestRateLimit(
         ipAddress: getClientIp(req),
         userAgent: req.headers["user-agent"],
       });
-      res
-        .status(429)
-        .json({
-          error: "Too many requests — please slow down and try again shortly.",
-        });
+      res.status(429).json({
+        error: "Too many requests — please slow down and try again shortly.",
+      });
       return;
     }
 

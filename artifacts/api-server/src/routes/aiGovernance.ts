@@ -61,14 +61,12 @@ async function actorFor(
     return null;
   }
   if (roles && !roles.includes(user.role as Role)) {
-    res
-      .status(403)
-      .json({
-        error:
-          roles.length === 1
-            ? "Administrators only"
-            : "Security analysts and administrators only",
-      });
+    res.status(403).json({
+      error:
+        roles.length === 1
+          ? "Administrators only"
+          : "Security analysts and administrators only",
+    });
     return null;
   }
   return {
@@ -115,21 +113,17 @@ router.put(
     const params = SetAiSystemStateParams.safeParse(req.params);
     const body = SetAiSystemStateBody.safeParse(req.body);
     if (!params.success || !body.success) {
-      res
-        .status(400)
-        .json({
-          error:
-            "Give a system id, enabled true/false, and a reason of 10–500 characters",
-        });
+      res.status(400).json({
+        error:
+          "Give a system id, enabled true/false, and a reason of 10–500 characters",
+      });
       return;
     }
     const system = AI_SYSTEMS.find((s) => s.id === params.data.id)!;
     if (!system.switchable) {
-      res
-        .status(400)
-        .json({
-          error: `${system.name} cannot be switched off: ${system.switchNote}`,
-        });
+      res.status(400).json({
+        error: `${system.name} cannot be switched off: ${system.switchNote}`,
+      });
       return;
     }
     await setAiSystemEnabled(
@@ -161,12 +155,10 @@ router.post(
     if (!actor) return;
     const body = SubmitAiChallengeBody.safeParse(req.body);
     if (!body.success) {
-      res
-        .status(400)
-        .json({
-          error:
-            "Choose the AI system, describe the decision in 10–1,000 characters, and keep any reference to letters, numbers and basic punctuation",
-        });
+      res.status(400).json({
+        error:
+          "Choose the AI system, describe the decision in 10–1,000 characters, and keep any reference to letters, numbers and basic punctuation",
+      });
       return;
     }
     const id = await submitChallenge(
@@ -214,11 +206,9 @@ router.post(
     });
     const body = AcknowledgeAiChallengeBody.safeParse(req.body);
     if (!params.success || !body.success) {
-      res
-        .status(400)
-        .json({
-          error: "Say how it will be investigated, in 5–1,000 characters",
-        });
+      res.status(400).json({
+        error: "Say how it will be investigated, in 5–1,000 characters",
+      });
       return;
     }
     try {
@@ -232,11 +222,9 @@ router.post(
         err instanceof ChallengeAlreadyResolvedError ||
         err instanceof ChallengeAlreadyAcknowledgedError
       ) {
-        res
-          .status(409)
-          .json({
-            error: `This challenge has already been ${err instanceof ChallengeAlreadyResolvedError ? "resolved" : "acknowledged"}`,
-          });
+        res.status(409).json({
+          error: `This challenge has already been ${err instanceof ChallengeAlreadyResolvedError ? "resolved" : "acknowledged"}`,
+        });
         return;
       }
       throw err;
@@ -260,12 +248,10 @@ router.post(
     });
     const body = ResolveAiChallengeBody.safeParse(req.body);
     if (!params.success || !body.success) {
-      res
-        .status(400)
-        .json({
-          error:
-            "Give an outcome (upheld or not-upheld) and a note of 5–1,000 characters",
-        });
+      res.status(400).json({
+        error:
+          "Give an outcome (upheld or not-upheld) and a note of 5–1,000 characters",
+      });
       return;
     }
     try {
