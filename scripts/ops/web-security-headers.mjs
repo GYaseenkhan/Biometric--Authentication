@@ -9,7 +9,10 @@
 //
 // Content-Security-Policy, directive by directive:
 //   script-src 'self'         only the site's own bundle: no inline script, no eval, no CDN
-//   style-src 'unsafe-inline' UI libraries set inline styles; inline CSS can't run script
+//   style-src 'self'          stylesheets from this site only, no inline <style>: React's style={}
+//                             sets properties through the DOM, which CSP allows. Tested 2026-09-27 on
+//                             every page (public, user, analyst, admin) with no violation; the ZAP
+//                             rescan had flagged the earlier 'unsafe-inline'
 //   font-src 'self'           fonts are bundled (@fontsource), not fetched from Google
 //   img-src data: blob:       inline icons, and camera frames drawn for face capture
 //   media-src blob:           the camera preview
@@ -20,7 +23,7 @@
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self'",
   "font-src 'self'",
   "img-src 'self' data: blob:",
   "media-src 'self' blob:",
