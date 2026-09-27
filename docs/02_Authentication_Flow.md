@@ -108,7 +108,8 @@ regardless of what the client claims. This is why:
 ## Session model
 
 - `express-session`, PostgreSQL-backed (`connect-pg-simple`), `httpOnly`, `secure` in production,
-  `sameSite: lax`.
+  `sameSite: lax` in every environment (production used `none` until 2026-09-27, left from an earlier
+  deployment with the web app and API on different domains; R-SC-5).
 - The `pendingUserId`/`tempToken` pair created after step 1 is **not** a valid session — no protected
   route accepts it. Only after step 2 succeeds is `session.userId` set.
 - `MFA_CHALLENGE_TTL_MS` (2 minutes) and `MFA_MAX_ATTEMPTS` (3) bound how long/how many times a pending
