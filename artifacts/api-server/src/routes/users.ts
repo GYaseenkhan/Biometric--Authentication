@@ -1,8 +1,8 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type RequestHandler } from "express";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
-import { eq, count } from "drizzle-orm";
-import { db, usersTable, passkeysTable, passwordResetTokensTable, uploadsTable, biometricKeysTable } from "@workspace/db";
+import { eq, count, sql } from "drizzle-orm";
+import { db, usersTable, passkeysTable, passwordResetTokensTable, uploadsTable, biometricKeysTable, sessionsTable } from "@workspace/db";
 import {
   GetUserParams,
   GetUserResponse,
@@ -19,10 +19,13 @@ import {
   ListUsersResponse,
   ResetUserMfaParams,
   ResetUserMfaResponse,
+  ClearPaymentHoldParams,
+  ClearPaymentHoldResponse,
   StaffResetPasswordParams,
   StaffResetPasswordResponse,
 } from "@workspace/api-zod";
 import { logEvent } from "../lib/auditLog";
+import { mapUser } from "../lib/mapUser";
 import { requireMfaEnrolled } from "../middlewares/requireMfaEnrolled";
 import { requireParentConsent } from "../middlewares/requireParentConsent";
 import { encryptJson } from "../lib/fileEncryption";
@@ -47,23 +50,14 @@ function requireAuth(req: import("express").Request, res: import("express").Resp
   return userId;
 }
 
-async function mapUser(user: typeof usersTable.$inferSelect) {
-  const passkeys = await db.select({ id: passkeysTable.id }).from(passkeysTable).where(eq(passkeysTable.userId, user.id)).limit(1);
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    faceEnrolled: user.faceEnrolled,
-    passkeyEnrolled: passkeys.length > 0,
-    dataConsentGiven: user.dataConsentGiven,
-    biometricConsentGiven: user.biometricConsentGiven,
-    parentConsentPending: user.parentGuardianEmail !== null && !user.parentConsentGiven,
-    trainingConsentGiven: user.trainingConsentGiven,
-    contentPersonalizationConsentGiven: user.contentPersonalizationConsentGiven,
-    subscriptionPlan: user.subscriptionPlan,
-    createdAt: user.createdAt.toISOString(),
-    updatedAt: user.updatedAt?.toISOString() ?? null,
+// Deleting your own account must always be possible, like withdrawing consent (docs/05): an account that
+// hasn't enrolled MFA yet, or a minor awaiting a parent, can still erase itself, confirmed by password in
+// the handler. Deleting someone else is an admin action, so the gates still apply there.
+function unlessDeletingSelf(gate: RequestHandler): RequestHandler {
+  return (req, res, next) => {
+    const rawId = Array.isArray(req.params["id"]) ? req.params["id"][0] : req.params["id"];
+    if (req.session.userId !== undefined && Number(rawId) === req.session.userId) return next();
+    return gate(req, res, next);
   };
 }
 
@@ -154,7 +148,7 @@ router.patch("/users/:id", requireParentConsent, requireMfaEnrolled, async (req,
 });
 
 // Uploads and passkeys cascade-delete; payments keep userId null (records outlive the account); security_logs keep userId as originally written — not a live FK, since mutating a hash-chained row after the fact breaks its hash (docs/04_Threat_Model_Risk_Assessment.md, R-LOG-3).
-router.delete("/users/:id", requireParentConsent, requireMfaEnrolled, async (req, res): Promise<void> => {
+router.delete("/users/:id", unlessDeletingSelf(requireParentConsent), unlessDeletingSelf(requireMfaEnrolled), async (req, res): Promise<void> => {
   const sessionUserId = requireAuth(req, res);
   if (!sessionUserId) return;
 
@@ -190,7 +184,16 @@ router.delete("/users/:id", requireParentConsent, requireMfaEnrolled, async (req
     db.select({ biometricKeyCount: count() }).from(biometricKeysTable).where(eq(biometricKeysTable.userId, params.data.id)),
   ]);
 
-  const [user] = await db.delete(usersTable).where(eq(usersTable.id, params.data.id)).returning();
+  // Passkeys, phone keys and signed-in sessions go in the same transaction as the account. Until
+  // 2026-09-26 the two key tables had no foreign key, so deleting an account left its keys behind
+  // (and its sessions until they expired) while this event claimed they were cascade-removed.
+  const user = await db.transaction(async (tx) => {
+    await tx.delete(passkeysTable).where(eq(passkeysTable.userId, params.data.id));
+    await tx.delete(biometricKeysTable).where(eq(biometricKeysTable.userId, params.data.id));
+    await tx.delete(sessionsTable).where(sql`${sessionsTable.sess} ->> 'userId' = ${String(params.data.id)}`);
+    const [deleted] = await tx.delete(usersTable).where(eq(usersTable.id, params.data.id)).returning();
+    return deleted;
+  });
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
@@ -297,6 +300,36 @@ router.delete("/users/:id/face", async (req, res): Promise<void> => {
 
   await logEvent({ eventType: "FACE_REMOVED", details: `Face enrollment removed (biometric consent withdrawn) for ${user.email}`, userId: sessionUserId, userEmail: user.email });
   res.json(RemoveFaceResponse.parse(await mapUser(user)));
+});
+
+// An admin decision, not IT support's: the hold follows a lost chargeback (lib/paymentLifecycle.ts).
+router.delete("/users/:id/payment-hold", requireParentConsent, requireMfaEnrolled, async (req, res): Promise<void> => {
+  const sessionUserId = requireAuth(req, res);
+  if (!sessionUserId) return;
+
+  const rawId = Array.isArray(req.params["id"]) ? req.params["id"][0] : req.params["id"];
+  const params = ClearPaymentHoldParams.safeParse({ id: Number(rawId) });
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [sessionUser] = await db.select({ role: usersTable.role, email: usersTable.email }).from(usersTable).where(eq(usersTable.id, sessionUserId));
+  if (sessionUser?.role !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const [before] = await db.select({ paymentHold: usersTable.paymentHold }).from(usersTable).where(eq(usersTable.id, params.data.id));
+  const [user] = await db.update(usersTable).set({ paymentHold: false }).where(eq(usersTable.id, params.data.id)).returning();
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  if (before?.paymentHold) {
+    await logEvent({ eventType: "PAYMENT_HOLD_CLEARED", details: `Payment hold cleared for ${user.email} by admin ${sessionUser.email}`, userId: sessionUserId, userEmail: sessionUser.email });
+  }
+  res.json(ClearPaymentHoldResponse.parse(await mapUser(user)));
 });
 
 router.post("/users/:id/reset-mfa", requireParentConsent, requireMfaEnrolled, async (req, res): Promise<void> => {

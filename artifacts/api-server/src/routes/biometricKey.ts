@@ -2,13 +2,16 @@ import { Router, type IRouter, type Request } from "express";
 import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
 import { z } from "zod/v4";
-import { db, usersTable, passkeysTable, biometricKeysTable } from "@workspace/db";
+import { db, usersTable, biometricKeysTable } from "@workspace/db";
 import { logEvent } from "../lib/auditLog";
+import { mapUser } from "../lib/mapUser";
 import { MFA_CHALLENGE_TTL_MS } from "./auth";
 import { requestRateLimit } from "../middlewares/requestRateLimit";
 import { requireParentConsent } from "../middlewares/requireParentConsent";
 import { checkAndRecordRequest } from "../lib/rateLimit";
 import { ABSOLUTE_SESSION_MAX_MS } from "../lib/sessionPolicy";
+import { enforceSessionLimit } from "../lib/sessionLimit";
+import { getClientIp } from "../lib/clientIp";
 
 const router: IRouter = Router();
 
@@ -41,12 +44,6 @@ function generateLinkCode(): string {
 
 const linkCodeCreateRateLimit = requestRateLimit("biometric-key-link-create", 10, 10 * 60 * 1000);
 
-function getClientIp(req: Request): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string") return forwarded.split(",")[0]?.trim() ?? "unknown";
-  return req.socket?.remoteAddress ?? "unknown";
-}
-
 function saveSession(req: Request): Promise<void> {
   return new Promise((resolve, reject) => {
     req.session.save((error) => (error ? reject(error) : resolve()));
@@ -77,29 +74,6 @@ async function pendingMfaValid(req: Request, res: import("express").Response): P
     return false;
   }
   return true;
-}
-
-async function mapUser(user: typeof usersTable.$inferSelect) {
-  const [passkeys, keys] = await Promise.all([
-    db.select({ id: passkeysTable.id }).from(passkeysTable).where(eq(passkeysTable.userId, user.id)).limit(1),
-    db.select({ id: biometricKeysTable.id }).from(biometricKeysTable).where(eq(biometricKeysTable.userId, user.id)).limit(1),
-  ]);
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    faceEnrolled: user.faceEnrolled,
-    passkeyEnrolled: passkeys.length > 0 || keys.length > 0,
-    dataConsentGiven: user.dataConsentGiven,
-    biometricConsentGiven: user.biometricConsentGiven,
-    parentConsentPending: user.parentGuardianEmail !== null && !user.parentConsentGiven,
-    trainingConsentGiven: user.trainingConsentGiven,
-    contentPersonalizationConsentGiven: user.contentPersonalizationConsentGiven,
-    subscriptionPlan: user.subscriptionPlan,
-    createdAt: user.createdAt.toISOString(),
-    updatedAt: user.updatedAt?.toISOString() ?? null,
-  };
 }
 
 // RSA-SHA256 (PKCS#1 v1.5) — react-native-biometrics' documented signing scheme for Android Keystore-backed keys. publicKeyB64 is raw base64 DER (SubjectPublicKeyInfo) from createKeys(), not PEM.
@@ -254,6 +228,8 @@ router.post("/auth/biometric-key/login-verify", async (req, res): Promise<void> 
     return;
   }
 
+  await enforceSessionLimit(req, user);
+
   await logEvent({ eventType: "LOGIN_PASSKEY_SUCCESS", details: `Biometric key MFA passed for ${user.email} — device-held key signed the server challenge`, userId: user.id, userEmail: user.email, ipAddress: ip, userAgent: req.headers["user-agent"] });
 
   res.json({ verified: true, user: await mapUser(user) });
@@ -339,6 +315,8 @@ router.post("/auth/biometric-key/redeem-link-code", async (req, res): Promise<vo
     res.status(500).json({ error: "Could not establish an authenticated session" });
     return;
   }
+
+  await enforceSessionLimit(req, user);
 
   await logEvent({
     eventType: "DEVICE_LINK_REDEEMED",

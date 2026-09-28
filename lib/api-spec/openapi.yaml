@@ -26,10 +26,16 @@ paths:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
+      description: Returns server health status, including whether the database answers
       responses:
         "200":
           description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+        "503":
+          description: The database did not answer within 3 seconds
           content:
             application/json:
               schema:
@@ -476,6 +482,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /users/{id}/payment-hold:
+    delete:
+      operationId: clearPaymentHold
+      tags: [users]
+      summary: Clear the payment hold placed after a lost chargeback (admin only)
+      description: Lets the account make purchases again. Recorded in the audit log as PAYMENT_HOLD_CLEARED.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        "200":
+          description: Hold cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /users/{id}/reset-password:
     post:
       operationId: staffResetPassword
@@ -666,6 +706,83 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /users/me/privacy-policy:
+    get:
+      operationId: getMyPrivacyPolicyStatus
+      tags: [users]
+      summary: Which privacy policy version is current, and which one this account last acknowledged
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrivacyPolicyStatus"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/me/privacy-policy/acknowledge:
+    post:
+      operationId: acknowledgePrivacyPolicy
+      tags: [users]
+      summary: Record that this account has been shown the current privacy policy
+      description: Recorded in the tamper-evident audit log as PRIVACY_POLICY_ACKNOWLEDGED. The version must be the current one, so nobody is recorded as having seen text they were not shown.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PrivacyPolicyAcknowledgeInput"
+      responses:
+        "200":
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrivacyPolicyStatus"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: The version shown is not the current one; reload the policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/me/export:
+    get:
+      operationId: exportMyData
+      tags: [users]
+      summary: Download a copy of this account's personal data (privacy policy section 11)
+      description: One JSON file with the account, consents, sign-in methods, uploads (file content included up to a total size limit), payments, the account's own security events and privacy-policy acknowledgements. The face template is described but not included. Limited to 5 exports per hour; each export is audit-logged as DATA_EXPORTED.
+      responses:
+        "200":
+          description: The export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataExport"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many exports in the last hour
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /users/me/training-consent:
     post:
       operationId: setTrainingConsent
@@ -707,6 +824,263 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "429":
           description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ai-security/report:
+    get:
+      operationId: getAiSecurityReport
+      tags: [ai-security]
+      summary: The team's AI/ML security proof-of-concept results, and the same attacks run against the live behaviour model
+      description: >-
+        `live` is computed on every call by running the attacks from artifacts/ai-model against the model behind
+        GET /behavior/suggested-action, with synthetic data only (no database reads or writes). `poc` is the recorded
+        output of the team's Python proof-of-concepts, regenerated by artifacts/ai-model/ai_security_report.py and
+        checked for staleness in CI.
+      responses:
+        "200":
+          description: Report computed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiSecurityReport"
+        "403":
+          description: MFA enrollment or parental consent required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ai/systems:
+    get:
+      operationId: getAiSystems
+      tags: [ai-governance]
+      summary: The AI system register — every place SecureAI uses AI, what it decides, who is accountable, and whether it is switched on
+      description: Public, so the transparency page works before sign-in. Who switched a system off, and why, is only in the staff view (GET /ai/oversight).
+      security: []
+      responses:
+        "200":
+          description: The register
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiSystemsResponse"
+
+  /ai/systems/{id}/state:
+    put:
+      operationId: setAiSystemState
+      tags: [ai-governance]
+      summary: Switch an AI system on or off (administrators only; recorded in the audit log with the reason)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            $ref: "#/components/schemas/AiSystemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAiSystemStateInput"
+      responses:
+        "200":
+          description: New state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiSystemStaffState"
+        "400":
+          description: Invalid input, or this system cannot be switched off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Administrators only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ai/challenges:
+    post:
+      operationId: submitAiChallenge
+      tags: [ai-governance]
+      summary: Challenge an AI decision — reviewed by a security analyst
+      description: Open to any signed-in account, including one that has not finished MFA setup, since a person the face model fails is exactly who needs this.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiChallengeInput"
+      responses:
+        "201":
+          description: Challenge recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiChallenge"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: listAiChallenges
+      tags: [ai-governance]
+      summary: Every challenge, newest first (security analysts and administrators)
+      responses:
+        "200":
+          description: Challenges
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiChallenge"
+        "403":
+          description: Staff only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ai/challenges/mine:
+    get:
+      operationId: listMyAiChallenges
+      tags: [ai-governance]
+      summary: This account's own challenges and their outcomes
+      responses:
+        "200":
+          description: Challenges
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiChallenge"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ai/challenges/{id}/resolve:
+    post:
+      operationId: resolveAiChallenge
+      tags: [ai-governance]
+      summary: Record the outcome of a challenge (security analysts and administrators)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolveAiChallengeInput"
+      responses:
+        "200":
+          description: Resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiChallenge"
+        "404":
+          description: No such challenge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Already resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ai/challenges/{id}/acknowledge:
+    post:
+      operationId: acknowledgeAiChallenge
+      tags: [ai-governance]
+      summary: Acknowledge a challenge and tell the person how it will be investigated (security analysts and administrators)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcknowledgeAiChallengeInput"
+      responses:
+        "200":
+          description: Acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiChallenge"
+        "404":
+          description: No such challenge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Already acknowledged or resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ai/oversight:
+    get:
+      operationId: getAiOversight
+      tags: [ai-governance]
+      summary: Switch states with who changed them and why, outcome monitoring, and the open-challenge count (security analysts and administrators)
+      responses:
+        "200":
+          description: Oversight view
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiOversight"
+        "403":
+          description: Staff only
           content:
             application/json:
               schema:
@@ -810,6 +1184,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: The account is on a payment hold after a lost chargeback; an admin must clear it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /payments/{id}/refund:
     post:
@@ -846,6 +1226,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Payment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: The payment is in, or was reversed by, a chargeback; or the account has used its self-service subscription refund for the year
           content:
             application/json:
               schema:
@@ -924,6 +1310,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: The account is on a payment hold after a lost chargeback; an admin must clear it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /payments/webhook:
     post:
@@ -990,7 +1382,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/UploadMeta"
         "400":
-          description: Bad request (unsupported type or too large)
+          description: Bad request (unsupported type, too large, or rejected by the virus scan)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The virus scanner is configured but not answering, so the file was not stored. Retry-After gives the wait in seconds.
           content:
             application/json:
               schema:
@@ -1099,7 +1497,7 @@ components:
 
     ContentProfileResult:
       type: object
-      required: [keywords, documentsConsidered]
+      required: [keywords, documentsConsidered, disabled]
       properties:
         keywords:
           description: Top keywords by frequency, highest first. Empty if consent isn't given or no text uploads exist.
@@ -1109,10 +1507,13 @@ components:
         documentsConsidered:
           description: How many of this account's own text uploads contributed to this profile
           type: number
+        disabled:
+          description: True when an administrator has switched personalisation off (see GET /ai/systems)
+          type: boolean
 
     SuggestedActionResult:
       type: object
-      required: [suggestion, distinctUsersSupporting, modelTrainedFromUsers, contextDepth]
+      required: [suggestion, distinctUsersSupporting, modelTrainedFromUsers, contextDepth, disabled]
       properties:
         suggestion:
           description: Predicted next event type, or null if nothing cleared the minimum-distinct-users threshold (or the account has no activity yet)
@@ -1127,10 +1528,13 @@ components:
           description: Whether the prediction came from the 2-event context (2, more specific/accurate) or fell back to the single-last-event table (1). Null if suggestion is null.
           type: ["number", "null"]
           enum: [1, 2, null]
+        disabled:
+          description: True when an administrator has switched suggestions off (see GET /ai/systems)
+          type: boolean
 
     User:
       type: object
-      required: [id, email, name, role, faceEnrolled, passkeyEnrolled, dataConsentGiven, biometricConsentGiven, parentConsentPending, trainingConsentGiven, contentPersonalizationConsentGiven, subscriptionPlan, createdAt]
+      required: [id, email, name, role, faceEnrolled, passkeyEnrolled, dataConsentGiven, biometricConsentGiven, parentConsentPending, trainingConsentGiven, contentPersonalizationConsentGiven, subscriptionPlan, paymentHold, createdAt]
       properties:
         id:
           type: number
@@ -1164,6 +1568,9 @@ components:
         subscriptionPlan:
           type: string
           enum: [free, plus, pro, team]
+        paymentHold:
+          description: True after the account lost a chargeback. New purchases are refused until an admin clears it.
+          type: boolean
         createdAt:
           type: string
         updatedAt:
@@ -1175,6 +1582,8 @@ components:
       properties:
         email:
           type: string
+          format: email
+          maxLength: 254
         name:
           type: string
           minLength: 1
@@ -1190,10 +1599,16 @@ components:
         parentGuardianEmail:
           description: Required only when dateOfBirth indicates the registrant is under the minor-consent age threshold. Registration succeeds but the account is gated (parentConsentPending) until this address confirms via an emailed link.
           type: string
+          format: email
+          maxLength: 254
         trainingConsent:
           description: Optional, defaults to false if omitted. Separate from dataConsent — whether this account's activity may contribute to the behavior model's training corpus from day one. Not required to register, and freely togglable afterward via POST /users/me/training-consent regardless of what was chosen here.
           type: boolean
           default: false
+        privacyPolicyVersion:
+          description: The privacy policy version shown on the registration form. When it is the current version, the registration records that this person was shown it (PRIVACY_POLICY_ACKNOWLEDGED); otherwise they are asked to review the policy after signing in.
+          type: string
+          maxLength: 32
 
     LoginCredentials:
       type: object
@@ -1464,10 +1879,14 @@ components:
         currency:
           type: string
         status:
+          description: disputed = the cardholder opened a chargeback; charged_back = the dispute was lost and the money returned to them
           type: string
-          enum: [pending, completed, failed, refunded]
+          enum: [pending, completed, failed, refunded, disputed, charged_back]
         description:
           type: string
+        planId:
+          description: The plan a subscription payment bought; null for one-off payments. Reversing the payment takes the plan back.
+          type: ["string", "null"]
         declineCode:
           description: Set only when status is "failed" — see lib/paymentSimulation.ts. Null otherwise.
           type: ["string", "null"]
@@ -1626,13 +2045,38 @@ components:
           type: string
           enum: [free, plus, pro, team]
 
+    PrivacyPolicyStatus:
+      type: object
+      required: [currentVersion, acknowledgedVersion, acknowledgedAt]
+      properties:
+        currentVersion:
+          type: string
+        acknowledgedVersion:
+          description: The latest version this account was recorded as having been shown, or null
+          type: ["string", "null"]
+        acknowledgedAt:
+          type: ["string", "null"]
+
+    PrivacyPolicyAcknowledgeInput:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: string
+          maxLength: 32
+
+    DataExport:
+      description: A personal data export. Its sections are described in the file's own notes field.
+      type: object
+      additionalProperties: true
+
     PaymentWebhookInput:
       type: object
       required: [type, paymentId]
       properties:
         type:
           type: string
-          enum: [payment.completed, payment.failed, payment.refunded]
+          enum: [payment.completed, payment.failed, payment.refunded, payment.disputed, payment.dispute_won, payment.dispute_lost]
         paymentId:
           type: number
 
@@ -1641,6 +2085,9 @@ components:
       required: [received]
       properties:
         received:
+          type: boolean
+        applied:
+          description: False when the event was a replay or out of order for the payment's current status, and changed nothing
           type: boolean
 
     UploadMeta:
@@ -1726,3 +2173,450 @@ components:
             excludes it from every training corpus until a source is declared.
           type: string
           enum: [own_work, third_party_individual, published_work, social_media, incidental_third_party_ip, unspecified]
+    AiSecurityReport:
+      type: object
+      required: [live, poc]
+      properties:
+        live:
+          $ref: "#/components/schemas/AiLiveModelValidation"
+        poc:
+          $ref: "#/components/schemas/AiPocReport"
+    AiLiveModelValidation:
+      type: object
+      required: [ranAt, model, thresholds, tests]
+      properties:
+        ranAt:
+          type: string
+          format: date-time
+        model:
+          type: string
+        thresholds:
+          type: object
+          required: [minDistinctUsers, maxEventsPerUser, maxDistinctTransitionsPerUser]
+          properties:
+            minDistinctUsers:
+              type: number
+            maxEventsPerUser:
+              type: number
+            maxDistinctTransitionsPerUser:
+              type: number
+        tests:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiValidationTest"
+    AiValidationOutcome:
+      type: object
+      required: [outcome, compromised]
+      properties:
+        outcome:
+          type: string
+        compromised:
+          type: boolean
+    AiValidationTest:
+      type: object
+      required: [id, title, mirrors, attack, baseline, secureai, probes, verdict, note]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        mirrors:
+          description: Which teammate's proof-of-concept attack this reproduces
+          type: string
+        attack:
+          type: string
+        baseline:
+          description: The same attack against the model with the defence removed; null where there is no meaningful undefended comparison
+          anyOf:
+            - $ref: "#/components/schemas/AiValidationOutcome"
+            - type: "null"
+        secureai:
+          $ref: "#/components/schemas/AiValidationOutcome"
+        probes:
+          type: array
+          items:
+            type: object
+            required: [prompt, baselineOutput, secureaiOutput]
+            properties:
+              prompt:
+                type: string
+              baselineOutput:
+                type: ["string", "null"]
+              secureaiOutput:
+                type: ["string", "null"]
+        verdict:
+          type: string
+          enum: [held, residual]
+        note:
+          type: ["string", "null"]
+    AiPocModelRun:
+      type: object
+      required: [prompt, output, canaryLeaked]
+      properties:
+        prompt:
+          type: string
+        output:
+          type: string
+        canaryLeaked:
+          type: boolean
+    AiPocReport:
+      type: object
+      required: [generator, starterKit, memorisation]
+      properties:
+        generator:
+          type: string
+        starterKit:
+          $ref: "#/components/schemas/AiPocStarterKit"
+        memorisation:
+          $ref: "#/components/schemas/AiPocMemorisation"
+    AiPocStarterKit:
+      description: Yaseen's model_starter.py, run unmodified
+      type: object
+      required: [script, author, sha256, corpus, consentGate, vulnerable, hardened, extractionTests, benign, deletion, console]
+      properties:
+        script:
+          type: string
+        author:
+          type: string
+        sha256:
+          type: string
+        corpus:
+          type: object
+          required: [records, canaryCopies, traceabilityFields]
+          properties:
+            records:
+              type: number
+            canaryCopies:
+              type: number
+            traceabilityFields:
+              type: array
+              items:
+                type: string
+        consentGate:
+          type: object
+          required: [allowed, blocked, perUserCap]
+          properties:
+            allowed:
+              type: number
+            blocked:
+              type: array
+              items:
+                type: object
+                required: [userId, sourceId, reason]
+                properties:
+                  userId:
+                    type: string
+                  sourceId:
+                    type: string
+                  reason:
+                    type: string
+            perUserCap:
+              type: number
+        vulnerable:
+          type: object
+          required: [docs, prompt, output, canaryLeaked]
+          properties:
+            docs:
+              type: number
+            prompt:
+              type: string
+            output:
+              type: string
+            canaryLeaked:
+              type: boolean
+        hardened:
+          type: object
+          required: [duplicatesRemoved, prompt, output, canaryLeaked]
+          properties:
+            duplicatesRemoved:
+              type: number
+            prompt:
+              type: string
+            output:
+              type: string
+            canaryLeaked:
+              type: boolean
+        extractionTests:
+          type: array
+          items:
+            type: object
+            required: [prompt, vulnerableLeaked, hardenedLeaked]
+            properties:
+              prompt:
+                type: string
+              vulnerableLeaked:
+                type: boolean
+              hardenedLeaked:
+                type: boolean
+        benign:
+          type: object
+          required: [prompt, output]
+          properties:
+            prompt:
+              type: string
+            output:
+              type: string
+        deletion:
+          type: object
+          required: [userId, recordsBefore, recordsAfter, retrainedDocs]
+          properties:
+            userId:
+              type: string
+            recordsBefore:
+              type: number
+            recordsAfter:
+              type: number
+            retrainedDocs:
+              type: number
+        console:
+          description: The script's own console output, captured verbatim
+          type: string
+    AiPocMemorisation:
+      description: Sadhakshi's memorisation_leakage_model.py, run unmodified
+      type: object
+      required: [script, author, sha256, records, vulnerable, duplicatesRemoved, hardened, benign, verdict, console]
+      properties:
+        script:
+          type: string
+        author:
+          type: string
+        sha256:
+          type: string
+        records:
+          type: number
+        vulnerable:
+          $ref: "#/components/schemas/AiPocModelRun"
+        duplicatesRemoved:
+          type: number
+        hardened:
+          $ref: "#/components/schemas/AiPocModelRun"
+        benign:
+          type: object
+          required: [prompt, output, works]
+          properties:
+            prompt:
+              type: string
+            output:
+              type: string
+            works:
+              type: boolean
+        verdict:
+          type: string
+          enum: [PASS, REVIEW]
+        console:
+          description: The script's own console output, captured verbatim
+          type: string
+    AiSystemId:
+      type: string
+      enum: [face-recognition, liveness, login-risk, behaviour-suggestions, content-personalisation, anomaly-alerts]
+    AiSystemEntry:
+      type: object
+      required: [id, name, kind, purpose, whyAi, decides, dataUsed, runsWhere, humanOversight, howToChallenge, knownLimits, riskRefs, accountableOwner, oversightRole, switchable, switchNote, enabled, stateChangedAt]
+      properties:
+        id:
+          $ref: "#/components/schemas/AiSystemId"
+        name:
+          type: string
+        kind:
+          type: string
+        purpose:
+          type: string
+        whyAi:
+          type: string
+        decides:
+          type: string
+        dataUsed:
+          type: string
+        runsWhere:
+          type: string
+        humanOversight:
+          type: string
+        howToChallenge:
+          type: string
+        knownLimits:
+          type: array
+          items:
+            type: string
+        riskRefs:
+          type: array
+          items:
+            type: string
+        accountableOwner:
+          type: string
+        oversightRole:
+          type: string
+        switchable:
+          type: boolean
+        switchNote:
+          type: string
+        enabled:
+          type: boolean
+        stateChangedAt:
+          type: ["string", "null"]
+          format: date-time
+    AiSystemsResponse:
+      type: object
+      required: [accountableOwner, systems]
+      properties:
+        accountableOwner:
+          type: string
+        systems:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiSystemEntry"
+    SetAiSystemStateInput:
+      type: object
+      required: [enabled, reason]
+      properties:
+        enabled:
+          type: boolean
+        reason:
+          description: Why — recorded in the audit log
+          type: string
+          minLength: 10
+          maxLength: 500
+    AiSystemStaffState:
+      type: object
+      required: [id, name, switchable, switchNote, enabled, changedAt, changedBy, reason]
+      properties:
+        id:
+          $ref: "#/components/schemas/AiSystemId"
+        name:
+          type: string
+        switchable:
+          type: boolean
+        switchNote:
+          type: string
+        enabled:
+          type: boolean
+        changedAt:
+          type: ["string", "null"]
+          format: date-time
+        changedBy:
+          type: ["string", "null"]
+        reason:
+          type: ["string", "null"]
+    AiChallengeInput:
+      type: object
+      required: [systemId, message]
+      properties:
+        systemId:
+          $ref: "#/components/schemas/AiSystemId"
+        message:
+          description: What the AI decided and why you think it was wrong
+          type: string
+          minLength: 10
+          maxLength: 1000
+        reference:
+          description: Optional pointer to the decision, e.g. the date and time of the sign-in
+          type: string
+          maxLength: 120
+          pattern: "^[A-Za-z0-9 _:.,/-]*$"
+    AcknowledgeAiChallengeInput:
+      type: object
+      required: [note]
+      properties:
+        note:
+          description: How the challenge will be investigated — shown to the person who raised it
+          type: string
+          minLength: 5
+          maxLength: 1000
+
+    ResolveAiChallengeInput:
+      type: object
+      required: [outcome, note]
+      properties:
+        outcome:
+          type: string
+          enum: [upheld, not-upheld]
+        note:
+          description: What was found and done — shown to the person who raised it
+          type: string
+          minLength: 5
+          maxLength: 1000
+    AiChallenge:
+      type: object
+      required: [id, systemId, systemName, reference, message, submittedAt, submittedBy, status, acknowledgeBy, overdue, acknowledgedAt, acknowledgedBy, acknowledgementNote, outcome, resolutionNote, resolvedAt, resolvedBy]
+      properties:
+        id:
+          type: number
+        systemId:
+          $ref: "#/components/schemas/AiSystemId"
+        systemName:
+          type: string
+        reference:
+          type: ["string", "null"]
+        message:
+          type: string
+        submittedAt:
+          type: string
+          format: date-time
+        submittedBy:
+          type: ["string", "null"]
+        status:
+          description: open = waiting to be acknowledged; acknowledged = a staff member has said how it will be investigated; resolved = decided
+          type: string
+          enum: [open, acknowledged, resolved]
+        acknowledgeBy:
+          description: The calendar date (YYYY-MM-DD, Australia/Melbourne) by which staff should acknowledge it — the response target Team 2 set, in business days after it was submitted. A plain string rather than format date, which the generated validator would turn into a timestamp
+          type: string
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+        overdue:
+          description: True while it is still waiting to be acknowledged after the acknowledge-by date
+          type: boolean
+        acknowledgedAt:
+          type: ["string", "null"]
+          format: date-time
+        acknowledgedBy:
+          type: ["string", "null"]
+        acknowledgementNote:
+          description: How it will be investigated — shown to the person who raised it
+          type: ["string", "null"]
+        outcome:
+          type: ["string", "null"]
+          enum: [upheld, not-upheld, null]
+        resolutionNote:
+          type: ["string", "null"]
+        resolvedAt:
+          type: ["string", "null"]
+          format: date-time
+        resolvedBy:
+          type: ["string", "null"]
+    AiOutcomeWindow:
+      type: object
+      required: [days, faceScans, faceScanFailures, passwordSignIns, signInsFlagged, suggestionQueries, suggestionsShown, profileQueries, securityAlerts, challengesFiled]
+      properties:
+        days:
+          type: number
+        faceScans:
+          type: number
+        faceScanFailures:
+          type: number
+        passwordSignIns:
+          type: number
+        signInsFlagged:
+          type: number
+        suggestionQueries:
+          type: number
+        suggestionsShown:
+          type: number
+        profileQueries:
+          type: number
+        securityAlerts:
+          type: number
+        challengesFiled:
+          type: number
+    AiOversight:
+      type: object
+      required: [systems, outcomes, openChallenges]
+      properties:
+        systems:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiSystemStaffState"
+        outcomes:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiOutcomeWindow"
+        openChallenges:
+          type: number

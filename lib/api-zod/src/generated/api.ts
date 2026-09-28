@@ -9,7 +9,7 @@ import * as zod from 'zod';
 
 
 /**
- * Returns server health status
+ * Returns server health status, including whether the database answers
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -20,19 +20,27 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Register a new user
  */
+export const registerUserBodyEmailMax = 254;
+
 
 export const registerUserBodyPasswordMin = 8;
 
+export const registerUserBodyParentGuardianEmailMax = 254;
+
 export const registerUserBodyTrainingConsentDefault = false;
+export const registerUserBodyPrivacyPolicyVersionMax = 32;
+
+
 
 export const RegisterUserBody = zod.object({
-  "email": zod.string(),
+  "email": zod.string().email().max(registerUserBodyEmailMax),
   "name": zod.string().min(1),
   "password": zod.string().min(registerUserBodyPasswordMin),
   "dataConsent": zod.boolean().describe('Must be true — explicit consent to processing of account\/profile data. Registration is rejected without it.'),
   "dateOfBirth": zod.string().describe('Self-reported, ISO date (YYYY-MM-DD). Used server-side to compute age at registration — never trust a client-computed \"is adult\" boolean, same principle as everywhere else consent\/verification is enforced in this app.'),
-  "parentGuardianEmail": zod.string().optional().describe('Required only when dateOfBirth indicates the registrant is under the minor-consent age threshold. Registration succeeds but the account is gated (parentConsentPending) until this address confirms via an emailed link.'),
-  "trainingConsent": zod.boolean().default(registerUserBodyTrainingConsentDefault).describe('Optional, defaults to false if omitted. Separate from dataConsent — whether this account\'s activity may contribute to the behavior model\'s training corpus from day one. Not required to register, and freely togglable afterward via POST \/users\/me\/training-consent regardless of what was chosen here.')
+  "parentGuardianEmail": zod.string().email().max(registerUserBodyParentGuardianEmailMax).optional().describe('Required only when dateOfBirth indicates the registrant is under the minor-consent age threshold. Registration succeeds but the account is gated (parentConsentPending) until this address confirms via an emailed link.'),
+  "trainingConsent": zod.boolean().default(registerUserBodyTrainingConsentDefault).describe('Optional, defaults to false if omitted. Separate from dataConsent — whether this account\'s activity may contribute to the behavior model\'s training corpus from day one. Not required to register, and freely togglable afterward via POST \/users\/me\/training-consent regardless of what was chosen here.'),
+  "privacyPolicyVersion": zod.string().max(registerUserBodyPrivacyPolicyVersionMax).optional().describe('The privacy policy version shown on the registration form. When it is the current version, the registration records that this person was shown it (PRIVACY_POLICY_ACKNOWLEDGED); otherwise they are asked to review the policy after signing in.')
 })
 
 export const RegisterUserResponse = zod.object({
@@ -49,6 +57,7 @@ export const RegisterUserResponse = zod.object({
   "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
   "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "paymentHold": zod.boolean().describe('True after the account lost a chargeback. New purchases are refused until an admin clears it.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
 }),
@@ -100,6 +109,7 @@ export const LoginUserResponse = zod.object({
   "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
   "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "paymentHold": zod.boolean().describe('True after the account lost a chargeback. New purchases are refused until an admin clears it.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
 }),
@@ -129,6 +139,7 @@ export const FaceVerifyResponse = zod.object({
   "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
   "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "paymentHold": zod.boolean().describe('True after the account lost a chargeback. New purchases are refused until an admin clears it.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
 }),
@@ -218,6 +229,7 @@ export const GetCurrentUserResponse = zod.object({
   "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
   "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "paymentHold": zod.boolean().describe('True after the account lost a chargeback. New purchases are refused until an admin clears it.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
 })
@@ -239,6 +251,7 @@ export const ListUsersResponseItem = zod.object({
   "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
   "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "paymentHold": zod.boolean().describe('True after the account lost a chargeback. New purchases are refused until an admin clears it.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
 })
@@ -269,6 +282,7 @@ export const GetUserResponse = zod.object({
   "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
   "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "paymentHold": zod.boolean().describe('True after the account lost a chargeback. New purchases are refused until an admin clears it.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
 })
@@ -306,6 +320,7 @@ export const UpdateUserResponse = zod.object({
   "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
   "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "paymentHold": zod.boolean().describe('True after the account lost a chargeback. New purchases are refused until an admin clears it.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
 })
@@ -359,6 +374,7 @@ export const EnrollFaceResponse = zod.object({
   "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
   "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "paymentHold": zod.boolean().describe('True after the account lost a chargeback. New purchases are refused until an admin clears it.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
 })
@@ -388,6 +404,7 @@ export const RemoveFaceResponse = zod.object({
   "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
   "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "paymentHold": zod.boolean().describe('True after the account lost a chargeback. New purchases are refused until an admin clears it.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
 })
@@ -418,6 +435,38 @@ export const ResetUserMfaResponse = zod.object({
   "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
   "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "paymentHold": zod.boolean().describe('True after the account lost a chargeback. New purchases are refused until an admin clears it.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().nullish()
+})
+
+
+/**
+ * Lets the account make purchases again. Recorded in the audit log as PAYMENT_HOLD_CLEARED.
+ * @summary Clear the payment hold placed after a lost chargeback (admin only)
+ */
+export const clearPaymentHoldPathIdMax = 2147483647;
+
+
+
+export const ClearPaymentHoldParams = zod.object({
+  "id": zod.coerce.number().int().min(1).max(clearPaymentHoldPathIdMax)
+})
+
+export const ClearPaymentHoldResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "name": zod.string(),
+  "role": zod.enum(['user', 'admin', 'security_analyst', 'it_support']),
+  "faceEnrolled": zod.boolean(),
+  "passkeyEnrolled": zod.boolean().describe('True when the account has at least one registered passkey'),
+  "dataConsentGiven": zod.boolean().describe('General data-processing consent, captured at registration'),
+  "biometricConsentGiven": zod.boolean().describe('Consent for biometric (face) data specifically — cleared whenever the stored face descriptor is deleted'),
+  "parentConsentPending": zod.boolean().describe('True when this account was registered under the minor-consent age threshold and a parent\/guardian has not yet confirmed via their emailed link — the account cannot use protected features until this clears'),
+  "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
+  "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
+  "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "paymentHold": zod.boolean().describe('True after the account lost a chargeback. New purchases are refused until an admin clears it.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
 })
@@ -578,6 +627,42 @@ export const ListDeletionAuditResponse = zod.array(ListDeletionAuditResponseItem
 
 
 /**
+ * @summary Which privacy policy version is current, and which one this account last acknowledged
+ */
+export const GetMyPrivacyPolicyStatusResponse = zod.object({
+  "currentVersion": zod.string(),
+  "acknowledgedVersion": zod.string().nullable().describe('The latest version this account was recorded as having been shown, or null'),
+  "acknowledgedAt": zod.string().nullable()
+})
+
+
+/**
+ * Recorded in the tamper-evident audit log as PRIVACY_POLICY_ACKNOWLEDGED. The version must be the current one, so nobody is recorded as having seen text they were not shown.
+ * @summary Record that this account has been shown the current privacy policy
+ */
+export const acknowledgePrivacyPolicyBodyVersionMax = 32;
+
+
+
+export const AcknowledgePrivacyPolicyBody = zod.object({
+  "version": zod.string().max(acknowledgePrivacyPolicyBodyVersionMax)
+})
+
+export const AcknowledgePrivacyPolicyResponse = zod.object({
+  "currentVersion": zod.string(),
+  "acknowledgedVersion": zod.string().nullable().describe('The latest version this account was recorded as having been shown, or null'),
+  "acknowledgedAt": zod.string().nullable()
+})
+
+
+/**
+ * One JSON file with the account, consents, sign-in methods, uploads (file content included up to a total size limit), payments, the account's own security events and privacy-policy acknowledgements. The face template is described but not included. Limited to 5 exports per hour; each export is audit-logged as DATA_EXPORTED.
+ * @summary Download a copy of this account's personal data (privacy policy section 11)
+ */
+export const ExportMyDataResponse = zod.record(zod.string(), zod.unknown()).describe('A personal data export. Its sections are described in the file\'s own notes field.')
+
+
+/**
  * Separate from dataConsentGiven — using the app is not the same as consenting to have your activity used to train the behavior model. Toggleable any time, unlike account-level consent.
  * @summary Opt in or out of contributing this account's activity to the behavior model's training corpus
  */
@@ -598,6 +683,7 @@ export const SetTrainingConsentResponse = zod.object({
   "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
   "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "paymentHold": zod.boolean().describe('True after the account lost a chargeback. New purchases are refused until an admin clears it.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
 })
@@ -611,7 +697,396 @@ export const GetSuggestedActionResponse = zod.object({
   "suggestion": zod.string().nullable().describe('Predicted next event type, or null if nothing cleared the minimum-distinct-users threshold (or the account has no activity yet)'),
   "distinctUsersSupporting": zod.number().describe('How many distinct consented users\' activity supports this specific prediction — 0 if suggestion is null'),
   "modelTrainedFromUsers": zod.number().describe('Total number of consented users the model was trained from on this call'),
-  "contextDepth": zod.union([zod.literal(1),zod.literal(2),zod.literal(null)]).nullable().describe('Whether the prediction came from the 2-event context (2, more specific\/accurate) or fell back to the single-last-event table (1). Null if suggestion is null.')
+  "contextDepth": zod.union([zod.literal(1),zod.literal(2),zod.literal(null)]).nullable().describe('Whether the prediction came from the 2-event context (2, more specific\/accurate) or fell back to the single-last-event table (1). Null if suggestion is null.'),
+  "disabled": zod.boolean().describe('True when an administrator has switched suggestions off (see GET \/ai\/systems)')
+})
+
+
+/**
+ * `live` is computed on every call by running the attacks from artifacts/ai-model against the model behind GET /behavior/suggested-action, with synthetic data only (no database reads or writes). `poc` is the recorded output of the team's Python proof-of-concepts, regenerated by artifacts/ai-model/ai_security_report.py and checked for staleness in CI.
+ * @summary The team's AI/ML security proof-of-concept results, and the same attacks run against the live behaviour model
+ */
+export const GetAiSecurityReportResponse = zod.object({
+  "live": zod.object({
+  "ranAt": zod.coerce.date(),
+  "model": zod.string(),
+  "thresholds": zod.object({
+  "minDistinctUsers": zod.number(),
+  "maxEventsPerUser": zod.number(),
+  "maxDistinctTransitionsPerUser": zod.number()
+}),
+  "tests": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "mirrors": zod.string().describe('Which teammate\'s proof-of-concept attack this reproduces'),
+  "attack": zod.string(),
+  "baseline": zod.union([zod.object({
+  "outcome": zod.string(),
+  "compromised": zod.boolean()
+}),zod.null()]).describe('The same attack against the model with the defence removed; null where there is no meaningful undefended comparison'),
+  "secureai": zod.object({
+  "outcome": zod.string(),
+  "compromised": zod.boolean()
+}),
+  "probes": zod.array(zod.object({
+  "prompt": zod.string(),
+  "baselineOutput": zod.string().nullable(),
+  "secureaiOutput": zod.string().nullable()
+})),
+  "verdict": zod.enum(['held', 'residual']),
+  "note": zod.string().nullable()
+}))
+}),
+  "poc": zod.object({
+  "generator": zod.string(),
+  "starterKit": zod.object({
+  "script": zod.string(),
+  "author": zod.string(),
+  "sha256": zod.string(),
+  "corpus": zod.object({
+  "records": zod.number(),
+  "canaryCopies": zod.number(),
+  "traceabilityFields": zod.array(zod.string())
+}),
+  "consentGate": zod.object({
+  "allowed": zod.number(),
+  "blocked": zod.array(zod.object({
+  "userId": zod.string(),
+  "sourceId": zod.string(),
+  "reason": zod.string()
+})),
+  "perUserCap": zod.number()
+}),
+  "vulnerable": zod.object({
+  "docs": zod.number(),
+  "prompt": zod.string(),
+  "output": zod.string(),
+  "canaryLeaked": zod.boolean()
+}),
+  "hardened": zod.object({
+  "duplicatesRemoved": zod.number(),
+  "prompt": zod.string(),
+  "output": zod.string(),
+  "canaryLeaked": zod.boolean()
+}),
+  "extractionTests": zod.array(zod.object({
+  "prompt": zod.string(),
+  "vulnerableLeaked": zod.boolean(),
+  "hardenedLeaked": zod.boolean()
+})),
+  "benign": zod.object({
+  "prompt": zod.string(),
+  "output": zod.string()
+}),
+  "deletion": zod.object({
+  "userId": zod.string(),
+  "recordsBefore": zod.number(),
+  "recordsAfter": zod.number(),
+  "retrainedDocs": zod.number()
+}),
+  "console": zod.string().describe('The script\'s own console output, captured verbatim')
+}).describe('Yaseen\'s model_starter.py, run unmodified'),
+  "memorisation": zod.object({
+  "script": zod.string(),
+  "author": zod.string(),
+  "sha256": zod.string(),
+  "records": zod.number(),
+  "vulnerable": zod.object({
+  "prompt": zod.string(),
+  "output": zod.string(),
+  "canaryLeaked": zod.boolean()
+}),
+  "duplicatesRemoved": zod.number(),
+  "hardened": zod.object({
+  "prompt": zod.string(),
+  "output": zod.string(),
+  "canaryLeaked": zod.boolean()
+}),
+  "benign": zod.object({
+  "prompt": zod.string(),
+  "output": zod.string(),
+  "works": zod.boolean()
+}),
+  "verdict": zod.enum(['PASS', 'REVIEW']),
+  "console": zod.string().describe('The script\'s own console output, captured verbatim')
+}).describe('Sadhakshi\'s memorisation_leakage_model.py, run unmodified')
+})
+})
+
+
+/**
+ * Public, so the transparency page works before sign-in. Who switched a system off, and why, is only in the staff view (GET /ai/oversight).
+ * @summary The AI system register — every place SecureAI uses AI, what it decides, who is accountable, and whether it is switched on
+ */
+export const GetAiSystemsResponse = zod.object({
+  "accountableOwner": zod.string(),
+  "systems": zod.array(zod.object({
+  "id": zod.enum(['face-recognition', 'liveness', 'login-risk', 'behaviour-suggestions', 'content-personalisation', 'anomaly-alerts']),
+  "name": zod.string(),
+  "kind": zod.string(),
+  "purpose": zod.string(),
+  "whyAi": zod.string(),
+  "decides": zod.string(),
+  "dataUsed": zod.string(),
+  "runsWhere": zod.string(),
+  "humanOversight": zod.string(),
+  "howToChallenge": zod.string(),
+  "knownLimits": zod.array(zod.string()),
+  "riskRefs": zod.array(zod.string()),
+  "accountableOwner": zod.string(),
+  "oversightRole": zod.string(),
+  "switchable": zod.boolean(),
+  "switchNote": zod.string(),
+  "enabled": zod.boolean(),
+  "stateChangedAt": zod.coerce.date().nullable()
+}))
+})
+
+
+/**
+ * @summary Switch an AI system on or off (administrators only; recorded in the audit log with the reason)
+ */
+export const SetAiSystemStateParams = zod.object({
+  "id": zod.enum(['face-recognition', 'liveness', 'login-risk', 'behaviour-suggestions', 'content-personalisation', 'anomaly-alerts'])
+})
+
+export const setAiSystemStateBodyReasonMin = 10;
+export const setAiSystemStateBodyReasonMax = 500;
+
+
+
+export const SetAiSystemStateBody = zod.object({
+  "enabled": zod.boolean(),
+  "reason": zod.string().min(setAiSystemStateBodyReasonMin).max(setAiSystemStateBodyReasonMax).describe('Why — recorded in the audit log')
+})
+
+export const SetAiSystemStateResponse = zod.object({
+  "id": zod.enum(['face-recognition', 'liveness', 'login-risk', 'behaviour-suggestions', 'content-personalisation', 'anomaly-alerts']),
+  "name": zod.string(),
+  "switchable": zod.boolean(),
+  "switchNote": zod.string(),
+  "enabled": zod.boolean(),
+  "changedAt": zod.coerce.date().nullable(),
+  "changedBy": zod.string().nullable(),
+  "reason": zod.string().nullable()
+})
+
+
+/**
+ * Open to any signed-in account, including one that has not finished MFA setup, since a person the face model fails is exactly who needs this.
+ * @summary Challenge an AI decision — reviewed by a security analyst
+ */
+export const submitAiChallengeBodyMessageMin = 10;
+export const submitAiChallengeBodyMessageMax = 1000;
+
+export const submitAiChallengeBodyReferenceMax = 120;
+
+
+export const submitAiChallengeBodyReferenceRegExp = new RegExp('^[A-Za-z0-9 _:.,/-]*$');
+
+
+export const SubmitAiChallengeBody = zod.object({
+  "systemId": zod.enum(['face-recognition', 'liveness', 'login-risk', 'behaviour-suggestions', 'content-personalisation', 'anomaly-alerts']),
+  "message": zod.string().min(submitAiChallengeBodyMessageMin).max(submitAiChallengeBodyMessageMax).describe('What the AI decided and why you think it was wrong'),
+  "reference": zod.string().max(submitAiChallengeBodyReferenceMax).regex(submitAiChallengeBodyReferenceRegExp).optional().describe('Optional pointer to the decision, e.g. the date and time of the sign-in')
+})
+
+export const submitAiChallengeResponseAcknowledgeByRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const SubmitAiChallengeResponse = zod.object({
+  "id": zod.number(),
+  "systemId": zod.enum(['face-recognition', 'liveness', 'login-risk', 'behaviour-suggestions', 'content-personalisation', 'anomaly-alerts']),
+  "systemName": zod.string(),
+  "reference": zod.string().nullable(),
+  "message": zod.string(),
+  "submittedAt": zod.coerce.date(),
+  "submittedBy": zod.string().nullable(),
+  "status": zod.enum(['open', 'acknowledged', 'resolved']).describe('open = waiting to be acknowledged; acknowledged = a staff member has said how it will be investigated; resolved = decided'),
+  "acknowledgeBy": zod.string().regex(submitAiChallengeResponseAcknowledgeByRegExp).describe('The calendar date (YYYY-MM-DD, Australia\/Melbourne) by which staff should acknowledge it — the response target Team 2 set, in business days after it was submitted. A plain string rather than format date, which the generated validator would turn into a timestamp'),
+  "overdue": zod.boolean().describe('True while it is still waiting to be acknowledged after the acknowledge-by date'),
+  "acknowledgedAt": zod.coerce.date().nullable(),
+  "acknowledgedBy": zod.string().nullable(),
+  "acknowledgementNote": zod.string().nullable().describe('How it will be investigated — shown to the person who raised it'),
+  "outcome": zod.union([zod.literal('upheld'),zod.literal('not-upheld'),zod.literal(null)]).nullable(),
+  "resolutionNote": zod.string().nullable(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "resolvedBy": zod.string().nullable()
+})
+
+
+/**
+ * @summary Every challenge, newest first (security analysts and administrators)
+ */
+export const listAiChallengesResponseAcknowledgeByRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const ListAiChallengesResponseItem = zod.object({
+  "id": zod.number(),
+  "systemId": zod.enum(['face-recognition', 'liveness', 'login-risk', 'behaviour-suggestions', 'content-personalisation', 'anomaly-alerts']),
+  "systemName": zod.string(),
+  "reference": zod.string().nullable(),
+  "message": zod.string(),
+  "submittedAt": zod.coerce.date(),
+  "submittedBy": zod.string().nullable(),
+  "status": zod.enum(['open', 'acknowledged', 'resolved']).describe('open = waiting to be acknowledged; acknowledged = a staff member has said how it will be investigated; resolved = decided'),
+  "acknowledgeBy": zod.string().regex(listAiChallengesResponseAcknowledgeByRegExp).describe('The calendar date (YYYY-MM-DD, Australia\/Melbourne) by which staff should acknowledge it — the response target Team 2 set, in business days after it was submitted. A plain string rather than format date, which the generated validator would turn into a timestamp'),
+  "overdue": zod.boolean().describe('True while it is still waiting to be acknowledged after the acknowledge-by date'),
+  "acknowledgedAt": zod.coerce.date().nullable(),
+  "acknowledgedBy": zod.string().nullable(),
+  "acknowledgementNote": zod.string().nullable().describe('How it will be investigated — shown to the person who raised it'),
+  "outcome": zod.union([zod.literal('upheld'),zod.literal('not-upheld'),zod.literal(null)]).nullable(),
+  "resolutionNote": zod.string().nullable(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "resolvedBy": zod.string().nullable()
+})
+export const ListAiChallengesResponse = zod.array(ListAiChallengesResponseItem)
+
+
+/**
+ * @summary This account's own challenges and their outcomes
+ */
+export const listMyAiChallengesResponseAcknowledgeByRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const ListMyAiChallengesResponseItem = zod.object({
+  "id": zod.number(),
+  "systemId": zod.enum(['face-recognition', 'liveness', 'login-risk', 'behaviour-suggestions', 'content-personalisation', 'anomaly-alerts']),
+  "systemName": zod.string(),
+  "reference": zod.string().nullable(),
+  "message": zod.string(),
+  "submittedAt": zod.coerce.date(),
+  "submittedBy": zod.string().nullable(),
+  "status": zod.enum(['open', 'acknowledged', 'resolved']).describe('open = waiting to be acknowledged; acknowledged = a staff member has said how it will be investigated; resolved = decided'),
+  "acknowledgeBy": zod.string().regex(listMyAiChallengesResponseAcknowledgeByRegExp).describe('The calendar date (YYYY-MM-DD, Australia\/Melbourne) by which staff should acknowledge it — the response target Team 2 set, in business days after it was submitted. A plain string rather than format date, which the generated validator would turn into a timestamp'),
+  "overdue": zod.boolean().describe('True while it is still waiting to be acknowledged after the acknowledge-by date'),
+  "acknowledgedAt": zod.coerce.date().nullable(),
+  "acknowledgedBy": zod.string().nullable(),
+  "acknowledgementNote": zod.string().nullable().describe('How it will be investigated — shown to the person who raised it'),
+  "outcome": zod.union([zod.literal('upheld'),zod.literal('not-upheld'),zod.literal(null)]).nullable(),
+  "resolutionNote": zod.string().nullable(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "resolvedBy": zod.string().nullable()
+})
+export const ListMyAiChallengesResponse = zod.array(ListMyAiChallengesResponseItem)
+
+
+/**
+ * @summary Record the outcome of a challenge (security analysts and administrators)
+ */
+export const resolveAiChallengePathIdMax = 2147483647;
+
+
+
+export const ResolveAiChallengeParams = zod.object({
+  "id": zod.coerce.number().int().min(1).max(resolveAiChallengePathIdMax)
+})
+
+export const resolveAiChallengeBodyNoteMin = 5;
+export const resolveAiChallengeBodyNoteMax = 1000;
+
+
+
+export const ResolveAiChallengeBody = zod.object({
+  "outcome": zod.enum(['upheld', 'not-upheld']),
+  "note": zod.string().min(resolveAiChallengeBodyNoteMin).max(resolveAiChallengeBodyNoteMax).describe('What was found and done — shown to the person who raised it')
+})
+
+export const resolveAiChallengeResponseAcknowledgeByRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const ResolveAiChallengeResponse = zod.object({
+  "id": zod.number(),
+  "systemId": zod.enum(['face-recognition', 'liveness', 'login-risk', 'behaviour-suggestions', 'content-personalisation', 'anomaly-alerts']),
+  "systemName": zod.string(),
+  "reference": zod.string().nullable(),
+  "message": zod.string(),
+  "submittedAt": zod.coerce.date(),
+  "submittedBy": zod.string().nullable(),
+  "status": zod.enum(['open', 'acknowledged', 'resolved']).describe('open = waiting to be acknowledged; acknowledged = a staff member has said how it will be investigated; resolved = decided'),
+  "acknowledgeBy": zod.string().regex(resolveAiChallengeResponseAcknowledgeByRegExp).describe('The calendar date (YYYY-MM-DD, Australia\/Melbourne) by which staff should acknowledge it — the response target Team 2 set, in business days after it was submitted. A plain string rather than format date, which the generated validator would turn into a timestamp'),
+  "overdue": zod.boolean().describe('True while it is still waiting to be acknowledged after the acknowledge-by date'),
+  "acknowledgedAt": zod.coerce.date().nullable(),
+  "acknowledgedBy": zod.string().nullable(),
+  "acknowledgementNote": zod.string().nullable().describe('How it will be investigated — shown to the person who raised it'),
+  "outcome": zod.union([zod.literal('upheld'),zod.literal('not-upheld'),zod.literal(null)]).nullable(),
+  "resolutionNote": zod.string().nullable(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "resolvedBy": zod.string().nullable()
+})
+
+
+/**
+ * @summary Acknowledge a challenge and tell the person how it will be investigated (security analysts and administrators)
+ */
+export const acknowledgeAiChallengePathIdMax = 2147483647;
+
+
+
+export const AcknowledgeAiChallengeParams = zod.object({
+  "id": zod.coerce.number().int().min(1).max(acknowledgeAiChallengePathIdMax)
+})
+
+export const acknowledgeAiChallengeBodyNoteMin = 5;
+export const acknowledgeAiChallengeBodyNoteMax = 1000;
+
+
+
+export const AcknowledgeAiChallengeBody = zod.object({
+  "note": zod.string().min(acknowledgeAiChallengeBodyNoteMin).max(acknowledgeAiChallengeBodyNoteMax).describe('How the challenge will be investigated — shown to the person who raised it')
+})
+
+export const acknowledgeAiChallengeResponseAcknowledgeByRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const AcknowledgeAiChallengeResponse = zod.object({
+  "id": zod.number(),
+  "systemId": zod.enum(['face-recognition', 'liveness', 'login-risk', 'behaviour-suggestions', 'content-personalisation', 'anomaly-alerts']),
+  "systemName": zod.string(),
+  "reference": zod.string().nullable(),
+  "message": zod.string(),
+  "submittedAt": zod.coerce.date(),
+  "submittedBy": zod.string().nullable(),
+  "status": zod.enum(['open', 'acknowledged', 'resolved']).describe('open = waiting to be acknowledged; acknowledged = a staff member has said how it will be investigated; resolved = decided'),
+  "acknowledgeBy": zod.string().regex(acknowledgeAiChallengeResponseAcknowledgeByRegExp).describe('The calendar date (YYYY-MM-DD, Australia\/Melbourne) by which staff should acknowledge it — the response target Team 2 set, in business days after it was submitted. A plain string rather than format date, which the generated validator would turn into a timestamp'),
+  "overdue": zod.boolean().describe('True while it is still waiting to be acknowledged after the acknowledge-by date'),
+  "acknowledgedAt": zod.coerce.date().nullable(),
+  "acknowledgedBy": zod.string().nullable(),
+  "acknowledgementNote": zod.string().nullable().describe('How it will be investigated — shown to the person who raised it'),
+  "outcome": zod.union([zod.literal('upheld'),zod.literal('not-upheld'),zod.literal(null)]).nullable(),
+  "resolutionNote": zod.string().nullable(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "resolvedBy": zod.string().nullable()
+})
+
+
+/**
+ * @summary Switch states with who changed them and why, outcome monitoring, and the open-challenge count (security analysts and administrators)
+ */
+export const GetAiOversightResponse = zod.object({
+  "systems": zod.array(zod.object({
+  "id": zod.enum(['face-recognition', 'liveness', 'login-risk', 'behaviour-suggestions', 'content-personalisation', 'anomaly-alerts']),
+  "name": zod.string(),
+  "switchable": zod.boolean(),
+  "switchNote": zod.string(),
+  "enabled": zod.boolean(),
+  "changedAt": zod.coerce.date().nullable(),
+  "changedBy": zod.string().nullable(),
+  "reason": zod.string().nullable()
+})),
+  "outcomes": zod.array(zod.object({
+  "days": zod.number(),
+  "faceScans": zod.number(),
+  "faceScanFailures": zod.number(),
+  "passwordSignIns": zod.number(),
+  "signInsFlagged": zod.number(),
+  "suggestionQueries": zod.number(),
+  "suggestionsShown": zod.number(),
+  "profileQueries": zod.number(),
+  "securityAlerts": zod.number(),
+  "challengesFiled": zod.number()
+})),
+  "openChallenges": zod.number()
 })
 
 
@@ -636,6 +1111,7 @@ export const SetContentPersonalizationConsentResponse = zod.object({
   "trainingConsentGiven": zod.boolean().describe('Separate from dataConsentGiven — whether this account\'s activity may contribute to the behavior model\'s training corpus. Toggleable any time, unlike dataConsentGiven.'),
   "contentPersonalizationConsentGiven": zod.boolean().describe('A third, distinct consent purpose — whether this account\'s own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST \/users\/me\/content-personalization-consent.'),
   "subscriptionPlan": zod.enum(['free', 'plus', 'pro', 'team']),
+  "paymentHold": zod.boolean().describe('True after the account lost a chargeback. New purchases are refused until an admin clears it.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish()
 })
@@ -650,7 +1126,8 @@ export const GetContentProfileResponse = zod.object({
   "keyword": zod.string(),
   "score": zod.number().describe('Relative frequency within this account\'s own text-upload corpus — not a probability, not comparable across accounts')
 })).describe('Top keywords by frequency, highest first. Empty if consent isn\'t given or no text uploads exist.'),
-  "documentsConsidered": zod.number().describe('How many of this account\'s own text uploads contributed to this profile')
+  "documentsConsidered": zod.number().describe('How many of this account\'s own text uploads contributed to this profile'),
+  "disabled": zod.boolean().describe('True when an administrator has switched personalisation off (see GET \/ai\/systems)')
 })
 
 
@@ -663,8 +1140,9 @@ export const ListPaymentsResponseItem = zod.object({
   "userEmail": zod.string().nullish(),
   "amount": zod.number(),
   "currency": zod.string(),
-  "status": zod.enum(['pending', 'completed', 'failed', 'refunded']),
+  "status": zod.enum(['pending', 'completed', 'failed', 'refunded', 'disputed', 'charged_back']).describe('disputed = the cardholder opened a chargeback; charged_back = the dispute was lost and the money returned to them'),
   "description": zod.string(),
+  "planId": zod.string().nullish().describe('The plan a subscription payment bought; null for one-off payments. Reversing the payment takes the plan back.'),
   "declineCode": zod.string().nullish().describe('Set only when status is \"failed\" — see lib\/paymentSimulation.ts. Null otherwise.'),
   "declineMessage": zod.string().nullish().describe('A user-facing explanation of the decline. Null unless status is \"failed\".'),
   "providerToken": zod.string(),
@@ -702,8 +1180,9 @@ export const CreatePaymentResponse = zod.object({
   "userEmail": zod.string().nullish(),
   "amount": zod.number(),
   "currency": zod.string(),
-  "status": zod.enum(['pending', 'completed', 'failed', 'refunded']),
+  "status": zod.enum(['pending', 'completed', 'failed', 'refunded', 'disputed', 'charged_back']).describe('disputed = the cardholder opened a chargeback; charged_back = the dispute was lost and the money returned to them'),
   "description": zod.string(),
+  "planId": zod.string().nullish().describe('The plan a subscription payment bought; null for one-off payments. Reversing the payment takes the plan back.'),
   "declineCode": zod.string().nullish().describe('Set only when status is \"failed\" — see lib\/paymentSimulation.ts. Null otherwise.'),
   "declineMessage": zod.string().nullish().describe('A user-facing explanation of the decline. Null unless status is \"failed\".'),
   "providerToken": zod.string(),
@@ -729,8 +1208,9 @@ export const RefundPaymentResponse = zod.object({
   "userEmail": zod.string().nullish(),
   "amount": zod.number(),
   "currency": zod.string(),
-  "status": zod.enum(['pending', 'completed', 'failed', 'refunded']),
+  "status": zod.enum(['pending', 'completed', 'failed', 'refunded', 'disputed', 'charged_back']).describe('disputed = the cardholder opened a chargeback; charged_back = the dispute was lost and the money returned to them'),
   "description": zod.string(),
+  "planId": zod.string().nullish().describe('The plan a subscription payment bought; null for one-off payments. Reversing the payment takes the plan back.'),
   "declineCode": zod.string().nullish().describe('Set only when status is \"failed\" — see lib\/paymentSimulation.ts. Null otherwise.'),
   "declineMessage": zod.string().nullish().describe('A user-facing explanation of the decline. Null unless status is \"failed\".'),
   "providerToken": zod.string(),
@@ -755,8 +1235,9 @@ export const GetPaymentResponse = zod.object({
   "userEmail": zod.string().nullish(),
   "amount": zod.number(),
   "currency": zod.string(),
-  "status": zod.enum(['pending', 'completed', 'failed', 'refunded']),
+  "status": zod.enum(['pending', 'completed', 'failed', 'refunded', 'disputed', 'charged_back']).describe('disputed = the cardholder opened a chargeback; charged_back = the dispute was lost and the money returned to them'),
   "description": zod.string(),
+  "planId": zod.string().nullish().describe('The plan a subscription payment bought; null for one-off payments. Reversing the payment takes the plan back.'),
   "declineCode": zod.string().nullish().describe('Set only when status is \"failed\" — see lib\/paymentSimulation.ts. Null otherwise.'),
   "declineMessage": zod.string().nullish().describe('A user-facing explanation of the decline. Null unless status is \"failed\".'),
   "providerToken": zod.string(),
@@ -803,8 +1284,9 @@ export const SubscribeResponse = zod.object({
   "userEmail": zod.string().nullish(),
   "amount": zod.number(),
   "currency": zod.string(),
-  "status": zod.enum(['pending', 'completed', 'failed', 'refunded']),
+  "status": zod.enum(['pending', 'completed', 'failed', 'refunded', 'disputed', 'charged_back']).describe('disputed = the cardholder opened a chargeback; charged_back = the dispute was lost and the money returned to them'),
   "description": zod.string(),
+  "planId": zod.string().nullish().describe('The plan a subscription payment bought; null for one-off payments. Reversing the payment takes the plan back.'),
   "declineCode": zod.string().nullish().describe('Set only when status is \"failed\" — see lib\/paymentSimulation.ts. Null otherwise.'),
   "declineMessage": zod.string().nullish().describe('A user-facing explanation of the decline. Null unless status is \"failed\".'),
   "providerToken": zod.string(),
@@ -819,12 +1301,13 @@ export const SubscribeResponse = zod.object({
  * @summary Receive a signed payment-status update from the (simulated) payment provider
  */
 export const PaymentWebhookBody = zod.object({
-  "type": zod.enum(['payment.completed', 'payment.failed', 'payment.refunded']),
+  "type": zod.enum(['payment.completed', 'payment.failed', 'payment.refunded', 'payment.disputed', 'payment.dispute_won', 'payment.dispute_lost']),
   "paymentId": zod.number()
 })
 
 export const PaymentWebhookResponse = zod.object({
-  "received": zod.boolean()
+  "received": zod.boolean(),
+  "applied": zod.boolean().optional().describe('False when the event was a replay or out of order for the payment\'s current status, and changed nothing')
 })
 
 

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { desc, gte, lte, eq, and, ilike, count, type SQL } from "drizzle-orm";
-import { db, securityLogsTable, threatsTable, usersTable } from "@workspace/db";
+import { desc, gte, lte, eq, and, ilike, count, sql, type SQL } from "drizzle-orm";
+import { db, securityLogsTable, threatsTable, usersTable, sessionsTable } from "@workspace/db";
 import {
   ListSecurityLogsQueryParams,
   ListSecurityLogsResponse,
@@ -15,15 +15,11 @@ import { requireMfaEnrolled } from "../middlewares/requireMfaEnrolled";
 import { requireParentConsent } from "../middlewares/requireParentConsent";
 import { verifyLogChain, repairLogChain, restoreLogChain, listDeletionAudit } from "../lib/auditLog";
 import { computeActiveAlerts } from "../lib/securityAlerting";
-
-function getClientIp(req: { headers: Record<string, string | string[] | undefined>; socket?: { remoteAddress?: string } }): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string") return forwarded.split(",")[0]?.trim() ?? "unknown";
-  return req.socket?.remoteAddress ?? "unknown";
-}
+import { getClientIp } from "../lib/clientIp";
 
 const router: IRouter = Router();
-router.use(requireParentConsent, requireMfaEnrolled);
+// Path-scoped: every router is mounted without a prefix, so an unscoped gate here would also run on requests meant for routers mounted after this one.
+router.use("/security", requireParentConsent, requireMfaEnrolled);
 
 // Admin is a superset role, including audit-log visibility — a deliberate departure from an earlier separation-of-duties design that kept admin and security_analyst disjoint (docs/04_Threat_Model_Risk_Assessment.md, "Admin/security_analyst merge"). That control is no longer in effect.
 function canSeeAuditLogs(role: string | undefined): boolean {
@@ -46,6 +42,13 @@ router.get("/security/dashboard", async (req, res): Promise<void> => {
     eq(securityLogsTable.eventType, "LOGIN_FAILED")
   );
   const [threatsResult] = await db.select({ count: count() }).from(threatsTable).where(eq(threatsTable.status, "active"));
+  // Signed-in sessions the server would still accept: not idle-expired, not a half-finished MFA challenge,
+  // and inside the absolute lifetime the middleware in app.ts enforces.
+  const [activeSessionsResult] = await db.select({ count: count() }).from(sessionsTable).where(and(
+    sql`${sessionsTable.expire} > now()`,
+    sql`${sessionsTable.sess} ->> 'userId' is not null`,
+    sql`coalesce((${sessionsTable.sess} ->> 'absoluteExpiresAt')::bigint, ${Number.MAX_SAFE_INTEGER}) >= ${now.getTime()}`,
+  ));
 
   // A plain "user" account gets the telemetry counts above but no event-level detail — other users' IPs/emails aren't "their own data".
   const recentLogs = canSeeLogs
@@ -56,7 +59,7 @@ router.get("/security/dashboard", async (req, res): Promise<void> => {
   res.json(GetSecurityDashboardResponse.parse({
     totalUsers: Number(totalUsersResult?.count ?? 0),
     faceEnrolledUsers: Number(faceEnrolledResult?.count ?? 0),
-    activeSessionsCount: 1, // Simplified: current session
+    activeSessionsCount: Number(activeSessionsResult?.count ?? 0),
     loginAttempts24h: Number(loginAttemptsResult?.count ?? 0),
     failedLogins24h: Number(failedLoginsResult?.count ?? 0),
     threatsDetected: Number(threatsResult?.count ?? 0),

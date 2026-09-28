@@ -1,10 +1,9 @@
 name: CI
 
-# Not yet run through an actual Actions runner in this environment — each
-# command has been verified locally, but the assembled workflow itself
-# hasn't been exercised end-to-end. drizzle-kit's normal `push` prompts
-# interactively on ambiguous schema changes, which hangs in CI — push-force
-# below skips that prompt (safe here since the CI database is always fresh).
+# All jobs have passed on GitHub Actions since 1b102b9 (2026-09-24).
+# drizzle-kit's normal `push` prompts interactively on ambiguous schema
+# changes, which hangs in CI — push-force below skips that prompt (safe here
+# since the CI database is always fresh).
 
 on:
   push:
@@ -26,6 +25,19 @@ jobs:
       # Typecheck + pnpm audit gated at --audit-level=critical (see
       # package.json's "ci" script and docs/04, Section 3).
       - run: pnpm run ci
+      # The AI Security page serves results recorded from the team's Python
+      # proof-of-concepts; fail if a PoC changed without them being regenerated.
+      - run: python3 artifacts/ai-model/ai_security_report.py --check
+      # Supplier integrity for the vendored face-api.js model weights: a
+      # silently swapped model file fails the build (docs/11, element 15).
+      - run: sha256sum -c artifacts/secureai/face-model-weights.sha256
+      # The ClamAV client against a fake clamd: INSTREAM framing, and an
+      # unreachable or confused scanner never being read as "clean".
+      - run: pnpm --filter @workspace/api-server run verify:clamd
+      # The deploy hook that installs ClamAV on the API instance.
+      - run: shellcheck artifacts/api-server/.platform/hooks/prebuild/10_clamav.sh
+      # The privacy policy text and the version the API records must match.
+      - run: node scripts/check-privacy-policy-version.mjs
 
   semgrep-sast:
     name: Semgrep SAST scan (real tool, not the adversarial-probe substitute)

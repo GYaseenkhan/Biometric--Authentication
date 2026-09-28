@@ -12,11 +12,14 @@ import {
   type AuthenticationResponseJSON,
 } from "@simplewebauthn/server";
 import { logEvent } from "../lib/auditLog";
+import { mapUser } from "../lib/mapUser";
 import { MFA_CHALLENGE_TTL_MS, loadUsableResetToken } from "./auth";
 import { ALLOWED_ORIGINS, isAllowedOrigin } from "../lib/allowedOrigins";
 import { requestRateLimit } from "../middlewares/requestRateLimit";
 import { requireParentConsent } from "../middlewares/requireParentConsent";
 import { ABSOLUTE_SESSION_MAX_MS } from "../lib/sessionPolicy";
+import { getClientIp } from "../lib/clientIp";
+import { enforceSessionLimit } from "../lib/sessionLimit";
 
 // verifyRegistrationResponse/verifyAuthenticationResponse below do the real cryptographic verification of the WebAuthn response — Zod here only types the surrounding fields (bounded deviceName, primitive checks) before that call, so it doesn't duplicate or risk being stricter than the crypto check.
 const WebAuthnResponseShape = z.looseObject({ id: z.string().min(1) });
@@ -31,12 +34,6 @@ const RP_NAME = "SecureAI";
 
 // Registering a passkey involves real WebAuthn attestation verification — throttle it per account so it can't be turned into a spam vector for unbounded passkey rows.
 const passkeyRegisterRateLimit = requestRateLimit("passkey-register", 15, 5 * 60 * 1000);
-
-function getClientIp(req: Request): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string") return forwarded.split(",")[0]?.trim() ?? "unknown";
-  return req.socket?.remoteAddress ?? "unknown";
-}
 
 // Validates against the same origin allowlist CORS enforces.
 function getRp(req: Request): { rpID: string; origin: string } | null {
@@ -88,26 +85,6 @@ function regenerateSession(req: Request): Promise<void> {
   return new Promise((resolve, reject) => {
     req.session.regenerate((error) => (error ? reject(error) : resolve()));
   });
-}
-
-async function mapUser(user: typeof usersTable.$inferSelect) {
-  const passkeys = await db.select({ id: passkeysTable.id }).from(passkeysTable).where(eq(passkeysTable.userId, user.id)).limit(1);
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    faceEnrolled: user.faceEnrolled,
-    passkeyEnrolled: passkeys.length > 0,
-    dataConsentGiven: user.dataConsentGiven,
-    biometricConsentGiven: user.biometricConsentGiven,
-    parentConsentPending: user.parentGuardianEmail !== null && !user.parentConsentGiven,
-    trainingConsentGiven: user.trainingConsentGiven,
-    contentPersonalizationConsentGiven: user.contentPersonalizationConsentGiven,
-    subscriptionPlan: user.subscriptionPlan,
-    createdAt: user.createdAt.toISOString(),
-    updatedAt: user.updatedAt?.toISOString() ?? null,
-  };
 }
 
 // Enrollment routes below require a fully authenticated session.
@@ -379,6 +356,8 @@ router.post("/auth/passkey/login-verify", async (req, res): Promise<void> => {
     res.status(500).json({ error: "Could not establish an authenticated session" });
     return;
   }
+
+  await enforceSessionLimit(req, user);
 
   await logEvent({ eventType: "LOGIN_PASSKEY_SUCCESS", details: `Passkey MFA passed for ${user.email} — device-held key signed the server challenge`, userId: user.id, userEmail: user.email, ipAddress: ip, userAgent: req.headers["user-agent"] });
 

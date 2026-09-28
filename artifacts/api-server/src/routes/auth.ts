@@ -22,13 +22,25 @@ import {
   VerifyParentConsentResponse,
 } from "@workspace/api-zod";
 import { logEvent } from "../lib/auditLog";
+import { mapUser } from "../lib/mapUser";
 import { faceMatchDistance, FACE_MATCH_THRESHOLD } from "../lib/faceUtils";
 import { decryptJson } from "../lib/fileEncryption";
 import { checkAndRecordRequest, releaseAttempt, clearAttempts } from "../lib/rateLimit";
+import { enforceSessionLimit } from "../lib/sessionLimit";
+import { PRIVACY_POLICY_VERSION, acknowledgementDetails } from "../lib/privacyPolicy";
 import { ABSOLUTE_SESSION_MAX_MS } from "../lib/sessionPolicy";
-import { assessLoginRisk } from "../lib/loginRiskModel";
+import { assessLoginRisk, type LoginRiskCode } from "../lib/loginRiskModel";
+import { isAiSystemEnabled } from "../lib/aiGovernance";
+
+const LOGIN_RISK_WORDING: Record<LoginRiskCode, string> = {
+  new_network: "a network this account has not signed in from before",
+  new_device: "a browser or device this account has not used before",
+  rapid_network_change: "a different network shortly after another sign-in",
+  unusual_time: "an unusual time of day for this account",
+};
 import { devAuthLinksEnabled } from "../lib/devLinks";
 import { sendMail, appUrl } from "../lib/mailer";
+import { getClientIp } from "../lib/clientIp";
 
 const router: IRouter = Router();
 
@@ -106,12 +118,6 @@ function isValidDescriptor(descriptor: number[]): boolean {
   );
 }
 
-function getClientIp(req: Request): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string") return forwarded.split(",")[0]?.trim() ?? "unknown";
-  return req.socket?.remoteAddress ?? "unknown";
-}
-
 // Regenerate the session ID to prevent session fixation when privileges change.
 function regenerateSession(req: Request): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -135,29 +141,6 @@ function saveSession(req: Request): Promise<void> {
       resolve();
     });
   });
-}
-
-async function mapUser(user: typeof usersTable.$inferSelect) {
-  const [passkeys, biometricKeys] = await Promise.all([
-    db.select({ id: passkeysTable.id }).from(passkeysTable).where(eq(passkeysTable.userId, user.id)).limit(1),
-    db.select({ id: biometricKeysTable.id }).from(biometricKeysTable).where(eq(biometricKeysTable.userId, user.id)).limit(1),
-  ]);
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    faceEnrolled: user.faceEnrolled,
-    passkeyEnrolled: passkeys.length > 0 || biometricKeys.length > 0,
-    dataConsentGiven: user.dataConsentGiven,
-    biometricConsentGiven: user.biometricConsentGiven,
-    parentConsentPending: user.parentGuardianEmail !== null && !user.parentConsentGiven,
-    trainingConsentGiven: user.trainingConsentGiven,
-    contentPersonalizationConsentGiven: user.contentPersonalizationConsentGiven,
-    subscriptionPlan: user.subscriptionPlan,
-    createdAt: user.createdAt.toISOString(),
-    updatedAt: user.updatedAt?.toISOString() ?? null,
-  };
 }
 
 router.get("/auth/me", async (req, res): Promise<void> => {
@@ -190,7 +173,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { email, name, password, dataConsent, dateOfBirth, parentGuardianEmail, trainingConsent } = parsed.data;
+  const { email, name, password, dataConsent, dateOfBirth, parentGuardianEmail, trainingConsent, privacyPolicyVersion } = parsed.data;
 
   if (!dataConsent) {
     res.status(400).json({ error: "Data-processing consent is required to register" });
@@ -258,6 +241,19 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     ipAddress: getClientIp(req),
     userAgent: req.headers["user-agent"],
   });
+
+  // Only the current version counts: an older or missing one (e.g. an older mobile build) means the
+  // person is asked to review the policy after signing in instead.
+  if (privacyPolicyVersion === PRIVACY_POLICY_VERSION) {
+    await logEvent({
+      eventType: "PRIVACY_POLICY_ACKNOWLEDGED",
+      details: acknowledgementDetails(PRIVACY_POLICY_VERSION, "registration"),
+      userId: user.id,
+      userEmail: user.email,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers["user-agent"],
+    });
+  }
 
   // Same audit event as the settings toggle (routes/behavior.ts) — keeps the trail consistent regardless of which screen granted it.
   if (trainingConsent === true) {
@@ -386,7 +382,10 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   clearAttempts(emailKey);
 
   // Runs on every successful password check, whether or not a second factor follows, so risk is captured at the moment it's knowable, not only for accounts without MFA.
-  const riskAssessment = await assessLoginRisk(user.id, ip, req.headers["user-agent"]);
+  // An administrator's off switch (lib/aiGovernance.ts): no scoring, no warning, no flag.
+  const riskAssessment = (await isAiSystemEnabled("login-risk"))
+    ? await assessLoginRisk(user.id, ip, req.headers["user-agent"])
+    : { level: "low" as const, reasons: [], codes: [] };
   if (riskAssessment.level !== "low") {
     await logEvent({
       eventType: "LOGIN_RISK_FLAGGED",
@@ -397,8 +396,10 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       userAgent: req.headers["user-agent"],
     });
   }
+  // Says what the automated check saw (Team 2: transparency and explainability), in the account owner's
+  // terms. The signals are about the owner's own sign-ins, so naming them tells an attacker nothing new.
   const securityNotice = riskAssessment.level === "high"
-    ? "We noticed a sign-in from a new device or network for this account. If this wasn't you, reset your password and consider enabling face or passkey verification."
+    ? `Automated sign-in check: this sign-in came from ${riskAssessment.codes.map((c) => LOGIN_RISK_WORDING[c]).join(", and ")}. If this wasn't you, reset your password now. If it was you, you can ignore this, or challenge the check on the How SecureAI uses AI page.`
     : null;
 
   const [userPasskeys, userBiometricKeys] = await Promise.all([
@@ -444,6 +445,8 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       res.status(500).json({ error: "Could not establish an authenticated session" });
       return;
     }
+
+    await enforceSessionLimit(req, user);
 
     await logEvent({ eventType: "LOGIN_SUCCESS", details: `Login successful for ${email} (no face MFA)`, userId: user.id, userEmail: user.email, ipAddress: ip, userAgent: req.headers["user-agent"] });
 
@@ -552,7 +555,8 @@ router.post("/auth/face-verify", async (req, res): Promise<void> => {
       return;
     }
     await logEvent({ eventType: "LOGIN_FACE_FAILED", details: `Face verification failed for ${user.email} (attempt ${attempts}/${MFA_MAX_ATTEMPTS}, dist=${distance.toFixed(4)})`, userId: user.id, userEmail: user.email, ipAddress: ip, userAgent: req.headers["user-agent"] });
-    res.status(401).json({ error: `Face verification failed — ${MFA_MAX_ATTEMPTS - attempts} attempt(s) remaining` });
+    // Says an AI model made the call and what to do instead; never the match distance, which would help an attacker probing the threshold.
+    res.status(401).json({ error: `The face-matching model did not recognise this scan as your enrolled face. Face the camera in even light and try again, or use your passkey instead — ${MFA_MAX_ATTEMPTS - attempts} attempt(s) remaining` });
     return;
   }
 
@@ -566,6 +570,8 @@ router.post("/auth/face-verify", async (req, res): Promise<void> => {
     res.status(500).json({ error: "Could not establish an authenticated session" });
     return;
   }
+
+  await enforceSessionLimit(req, user);
 
   await logEvent({ eventType: "LOGIN_FACE_SUCCESS", details: `Biometric MFA passed for ${user.email} (dist=${distance.toFixed(4)})`, userId: user.id, userEmail: user.email, ipAddress: ip, userAgent: req.headers["user-agent"] });
 
@@ -701,7 +707,7 @@ router.post("/auth/reset-password/face", async (req, res): Promise<void> => {
     const attempts = record.attempts + 1;
     await db.update(passwordResetTokensTable).set({ attempts }).where(eq(passwordResetTokensTable.id, record.id));
     await logEvent({ eventType: "PASSWORD_RESET_FACE_FAILED", details: `Reset face verification failed for ${user.email} (attempt ${attempts}/${RESET_MAX_ATTEMPTS}, dist=${resetDistance.toFixed(4)})`, userId: user.id, userEmail: user.email, ipAddress: ip, userAgent: req.headers["user-agent"] });
-    res.status(401).json({ error: `Face did not match — ${RESET_MAX_ATTEMPTS - attempts} attempt(s) remaining` });
+    res.status(401).json({ error: `The face-matching model did not recognise this scan as your enrolled face. Try again in even light, or verify with your passkey instead — ${RESET_MAX_ATTEMPTS - attempts} attempt(s) remaining` });
     return;
   }
 

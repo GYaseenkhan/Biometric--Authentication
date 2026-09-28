@@ -10,10 +10,13 @@ import paymentsRouter from "./payments";
 import uploadsRouter from "./uploads";
 import behaviorRouter from "./behavior";
 import contentProfileRouter from "./contentProfile";
+import aiSecurityRouter from "./aiSecurity";
+import aiGovernanceRouter from "./aiGovernance";
+import privacyRouter from "./privacy";
 
 const router: IRouter = Router();
 
-// webhooksRouter has no session/auth requirement (server-to-server, HMAC verified) — must be mounted before any router with a path-less `router.use(middleware)` (e.g. security.ts's blanket MFA gate), or that gate would intercept it first.
+// Routers are mounted without a prefix, so a router-level gate must be path-scoped (router.use("/payments", gate)); a path-less router.use would run on every request that passes through, including the unauthenticated webhook and the consent-withdrawal routes mounted later.
 router.use(healthRouter);
 router.use(webhooksRouter);
 router.use(authRouter);
@@ -25,5 +28,8 @@ router.use(paymentsRouter);
 router.use(uploadsRouter);
 router.use(behaviorRouter);
 router.use(contentProfileRouter);
+router.use(aiSecurityRouter);
+router.use(aiGovernanceRouter);
+router.use(privacyRouter);
 
 export default router;

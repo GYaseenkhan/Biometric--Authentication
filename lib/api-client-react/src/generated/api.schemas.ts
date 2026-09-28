@@ -32,6 +32,8 @@ export interface ContentProfileResult {
   keywords: KeywordScore[];
   /** How many of this account's own text uploads contributed to this profile */
   documentsConsidered: number;
+  /** True when an administrator has switched personalisation off (see GET /ai/systems) */
+  disabled: boolean;
 }
 
 /**
@@ -61,6 +63,8 @@ export interface SuggestedActionResult {
      * @nullable
      */
   contextDepth: SuggestedActionResultContextDepth;
+  /** True when an administrator has switched suggestions off (see GET /ai/systems) */
+  disabled: boolean;
 }
 
 export type UserRole = typeof UserRole[keyof typeof UserRole];
@@ -102,12 +106,15 @@ export interface User {
   /** A third, distinct consent purpose — whether this account's own uploaded text content may be read (decrypted server-side) to build a private, never-pooled personalization profile. Separate from trainingConsentGiven, which only ever gates event-type behavioral training, never upload content. Toggleable any time via POST /users/me/content-personalization-consent. */
   contentPersonalizationConsentGiven: boolean;
   subscriptionPlan: UserSubscriptionPlan;
+  /** True after the account lost a chargeback. New purchases are refused until an admin clears it. */
+  paymentHold: boolean;
   createdAt: string;
   /** @nullable */
   updatedAt?: string | null;
 }
 
 export interface UserRegistration {
+  /** @maxLength 254 */
   email: string;
   /** @minLength 1 */
   name: string;
@@ -117,10 +124,18 @@ export interface UserRegistration {
   dataConsent: boolean;
   /** Self-reported, ISO date (YYYY-MM-DD). Used server-side to compute age at registration — never trust a client-computed "is adult" boolean, same principle as everywhere else consent/verification is enforced in this app. */
   dateOfBirth: string;
-  /** Required only when dateOfBirth indicates the registrant is under the minor-consent age threshold. Registration succeeds but the account is gated (parentConsentPending) until this address confirms via an emailed link. */
+  /**
+     * Required only when dateOfBirth indicates the registrant is under the minor-consent age threshold. Registration succeeds but the account is gated (parentConsentPending) until this address confirms via an emailed link.
+     * @maxLength 254
+     */
   parentGuardianEmail?: string;
   /** Optional, defaults to false if omitted. Separate from dataConsent — whether this account's activity may contribute to the behavior model's training corpus from day one. Not required to register, and freely togglable afterward via POST /users/me/training-consent regardless of what was chosen here. */
   trainingConsent?: boolean;
+  /**
+     * The privacy policy version shown on the registration form. When it is the current version, the registration records that this person was shown it (PRIVACY_POLICY_ACKNOWLEDGED); otherwise they are asked to review the policy after signing in.
+     * @maxLength 32
+     */
+  privacyPolicyVersion?: string;
 }
 
 export interface LoginCredentials {
@@ -321,6 +336,9 @@ export interface DeletionAuditEntry {
   currentlyRestored: boolean;
 }
 
+/**
+ * disputed = the cardholder opened a chargeback; charged_back = the dispute was lost and the money returned to them
+ */
 export type PaymentStatus = typeof PaymentStatus[keyof typeof PaymentStatus];
 
 
@@ -329,6 +347,8 @@ export const PaymentStatus = {
   completed: 'completed',
   failed: 'failed',
   refunded: 'refunded',
+  disputed: 'disputed',
+  charged_back: 'charged_back',
 } as const;
 
 export interface Payment {
@@ -342,8 +362,14 @@ export interface Payment {
   userEmail?: string | null;
   amount: number;
   currency: string;
+  /** disputed = the cardholder opened a chargeback; charged_back = the dispute was lost and the money returned to them */
   status: PaymentStatus;
   description: string;
+  /**
+     * The plan a subscription payment bought; null for one-off payments. Reversing the payment takes the plan back.
+     * @nullable
+     */
+  planId?: string | null;
   /**
      * Set only when status is "failed" — see lib/paymentSimulation.ts. Null otherwise.
      * @nullable
@@ -497,6 +523,27 @@ export interface SubscribeResult {
   subscriptionPlan: SubscribeResultSubscriptionPlan;
 }
 
+export interface PrivacyPolicyStatus {
+  currentVersion: string;
+  /**
+     * The latest version this account was recorded as having been shown, or null
+     * @nullable
+     */
+  acknowledgedVersion: string | null;
+  /** @nullable */
+  acknowledgedAt: string | null;
+}
+
+export interface PrivacyPolicyAcknowledgeInput {
+  /** @maxLength 32 */
+  version: string;
+}
+
+/**
+ * A personal data export. Its sections are described in the file's own notes field.
+ */
+export interface DataExport { [key: string]: unknown }
+
 export type PaymentWebhookInputType = typeof PaymentWebhookInputType[keyof typeof PaymentWebhookInputType];
 
 
@@ -504,6 +551,9 @@ export const PaymentWebhookInputType = {
   paymentcompleted: 'payment.completed',
   paymentfailed: 'payment.failed',
   paymentrefunded: 'payment.refunded',
+  paymentdisputed: 'payment.disputed',
+  paymentdispute_won: 'payment.dispute_won',
+  paymentdispute_lost: 'payment.dispute_lost',
 } as const;
 
 export interface PaymentWebhookInput {
@@ -513,6 +563,8 @@ export interface PaymentWebhookInput {
 
 export interface PaymentWebhookResult {
   received: boolean;
+  /** False when the event was a replay or out of order for the payment's current status, and changed nothing */
+  applied?: boolean;
 }
 
 export type UploadMetaFileType = typeof UploadMetaFileType[keyof typeof UploadMetaFileType];
@@ -608,6 +660,357 @@ export interface UploadInput {
   dataBase64: string;
   /** Declared origin of the content, per Team 2's Data Source Acceptability Matrix. Optional: omitting it stores the upload as "unspecified", which keeps the file fully usable by its owner but excludes it from every training corpus until a source is declared. */
   contentSource?: UploadInputContentSource;
+}
+
+export interface AiValidationOutcome {
+  outcome: string;
+  compromised: boolean;
+}
+
+export type AiValidationTestVerdict = typeof AiValidationTestVerdict[keyof typeof AiValidationTestVerdict];
+
+
+export const AiValidationTestVerdict = {
+  held: 'held',
+  residual: 'residual',
+} as const;
+
+export type AiValidationTestProbesItem = {
+  prompt: string;
+  /** @nullable */
+  baselineOutput: string | null;
+  /** @nullable */
+  secureaiOutput: string | null;
+};
+
+export interface AiValidationTest {
+  id: string;
+  title: string;
+  /** Which teammate's proof-of-concept attack this reproduces */
+  mirrors: string;
+  attack: string;
+  /** The same attack against the model with the defence removed; null where there is no meaningful undefended comparison */
+  baseline: AiValidationOutcome | null;
+  secureai: AiValidationOutcome;
+  probes: AiValidationTestProbesItem[];
+  verdict: AiValidationTestVerdict;
+  /** @nullable */
+  note: string | null;
+}
+
+export type AiLiveModelValidationThresholds = {
+  minDistinctUsers: number;
+  maxEventsPerUser: number;
+  maxDistinctTransitionsPerUser: number;
+};
+
+export interface AiLiveModelValidation {
+  ranAt: string;
+  model: string;
+  thresholds: AiLiveModelValidationThresholds;
+  tests: AiValidationTest[];
+}
+
+export type AiPocStarterKitCorpus = {
+  records: number;
+  canaryCopies: number;
+  traceabilityFields: string[];
+};
+
+export type AiPocStarterKitConsentGateBlockedItem = {
+  userId: string;
+  sourceId: string;
+  reason: string;
+};
+
+export type AiPocStarterKitConsentGate = {
+  allowed: number;
+  blocked: AiPocStarterKitConsentGateBlockedItem[];
+  perUserCap: number;
+};
+
+export type AiPocStarterKitVulnerable = {
+  docs: number;
+  prompt: string;
+  output: string;
+  canaryLeaked: boolean;
+};
+
+export type AiPocStarterKitHardened = {
+  duplicatesRemoved: number;
+  prompt: string;
+  output: string;
+  canaryLeaked: boolean;
+};
+
+export type AiPocStarterKitExtractionTestsItem = {
+  prompt: string;
+  vulnerableLeaked: boolean;
+  hardenedLeaked: boolean;
+};
+
+export type AiPocStarterKitBenign = {
+  prompt: string;
+  output: string;
+};
+
+export type AiPocStarterKitDeletion = {
+  userId: string;
+  recordsBefore: number;
+  recordsAfter: number;
+  retrainedDocs: number;
+};
+
+/**
+ * Yaseen's model_starter.py, run unmodified
+ */
+export interface AiPocStarterKit {
+  script: string;
+  author: string;
+  sha256: string;
+  corpus: AiPocStarterKitCorpus;
+  consentGate: AiPocStarterKitConsentGate;
+  vulnerable: AiPocStarterKitVulnerable;
+  hardened: AiPocStarterKitHardened;
+  extractionTests: AiPocStarterKitExtractionTestsItem[];
+  benign: AiPocStarterKitBenign;
+  deletion: AiPocStarterKitDeletion;
+  /** The script's own console output, captured verbatim */
+  console: string;
+}
+
+export interface AiPocModelRun {
+  prompt: string;
+  output: string;
+  canaryLeaked: boolean;
+}
+
+export type AiPocMemorisationVerdict = typeof AiPocMemorisationVerdict[keyof typeof AiPocMemorisationVerdict];
+
+
+export const AiPocMemorisationVerdict = {
+  PASS: 'PASS',
+  REVIEW: 'REVIEW',
+} as const;
+
+export type AiPocMemorisationBenign = {
+  prompt: string;
+  output: string;
+  works: boolean;
+};
+
+/**
+ * Sadhakshi's memorisation_leakage_model.py, run unmodified
+ */
+export interface AiPocMemorisation {
+  script: string;
+  author: string;
+  sha256: string;
+  records: number;
+  vulnerable: AiPocModelRun;
+  duplicatesRemoved: number;
+  hardened: AiPocModelRun;
+  benign: AiPocMemorisationBenign;
+  verdict: AiPocMemorisationVerdict;
+  /** The script's own console output, captured verbatim */
+  console: string;
+}
+
+export interface AiPocReport {
+  generator: string;
+  starterKit: AiPocStarterKit;
+  memorisation: AiPocMemorisation;
+}
+
+export interface AiSecurityReport {
+  live: AiLiveModelValidation;
+  poc: AiPocReport;
+}
+
+export type AiSystemId = typeof AiSystemId[keyof typeof AiSystemId];
+
+
+export const AiSystemId = {
+  'face-recognition': 'face-recognition',
+  liveness: 'liveness',
+  'login-risk': 'login-risk',
+  'behaviour-suggestions': 'behaviour-suggestions',
+  'content-personalisation': 'content-personalisation',
+  'anomaly-alerts': 'anomaly-alerts',
+} as const;
+
+export interface AiSystemEntry {
+  id: AiSystemId;
+  name: string;
+  kind: string;
+  purpose: string;
+  whyAi: string;
+  decides: string;
+  dataUsed: string;
+  runsWhere: string;
+  humanOversight: string;
+  howToChallenge: string;
+  knownLimits: string[];
+  riskRefs: string[];
+  accountableOwner: string;
+  oversightRole: string;
+  switchable: boolean;
+  switchNote: string;
+  enabled: boolean;
+  /** @nullable */
+  stateChangedAt: string | null;
+}
+
+export interface AiSystemsResponse {
+  accountableOwner: string;
+  systems: AiSystemEntry[];
+}
+
+export interface SetAiSystemStateInput {
+  enabled: boolean;
+  /**
+     * Why — recorded in the audit log
+     * @minLength 10
+     * @maxLength 500
+     */
+  reason: string;
+}
+
+export interface AiSystemStaffState {
+  id: AiSystemId;
+  name: string;
+  switchable: boolean;
+  switchNote: string;
+  enabled: boolean;
+  /** @nullable */
+  changedAt: string | null;
+  /** @nullable */
+  changedBy: string | null;
+  /** @nullable */
+  reason: string | null;
+}
+
+export interface AiChallengeInput {
+  systemId: AiSystemId;
+  /**
+     * What the AI decided and why you think it was wrong
+     * @minLength 10
+     * @maxLength 1000
+     */
+  message: string;
+  /**
+     * Optional pointer to the decision, e.g. the date and time of the sign-in
+     * @maxLength 120
+     * @pattern ^[A-Za-z0-9 _:.,/-]*$
+     */
+  reference?: string;
+}
+
+export interface AcknowledgeAiChallengeInput {
+  /**
+     * How the challenge will be investigated — shown to the person who raised it
+     * @minLength 5
+     * @maxLength 1000
+     */
+  note: string;
+}
+
+export type ResolveAiChallengeInputOutcome = typeof ResolveAiChallengeInputOutcome[keyof typeof ResolveAiChallengeInputOutcome];
+
+
+export const ResolveAiChallengeInputOutcome = {
+  upheld: 'upheld',
+  'not-upheld': 'not-upheld',
+} as const;
+
+export interface ResolveAiChallengeInput {
+  outcome: ResolveAiChallengeInputOutcome;
+  /**
+     * What was found and done — shown to the person who raised it
+     * @minLength 5
+     * @maxLength 1000
+     */
+  note: string;
+}
+
+/**
+ * open = waiting to be acknowledged; acknowledged = a staff member has said how it will be investigated; resolved = decided
+ */
+export type AiChallengeStatus = typeof AiChallengeStatus[keyof typeof AiChallengeStatus];
+
+
+export const AiChallengeStatus = {
+  open: 'open',
+  acknowledged: 'acknowledged',
+  resolved: 'resolved',
+} as const;
+
+/**
+ * @nullable
+ */
+export type AiChallengeOutcome = typeof AiChallengeOutcome[keyof typeof AiChallengeOutcome] | null;
+
+
+export const AiChallengeOutcome = {
+  upheld: 'upheld',
+  'not-upheld': 'not-upheld',
+} as const;
+
+export interface AiChallenge {
+  id: number;
+  systemId: AiSystemId;
+  systemName: string;
+  /** @nullable */
+  reference: string | null;
+  message: string;
+  submittedAt: string;
+  /** @nullable */
+  submittedBy: string | null;
+  /** open = waiting to be acknowledged; acknowledged = a staff member has said how it will be investigated; resolved = decided */
+  status: AiChallengeStatus;
+  /**
+     * The calendar date (YYYY-MM-DD, Australia/Melbourne) by which staff should acknowledge it — the response target Team 2 set, in business days after it was submitted. A plain string rather than format date, which the generated validator would turn into a timestamp
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  acknowledgeBy: string;
+  /** True while it is still waiting to be acknowledged after the acknowledge-by date */
+  overdue: boolean;
+  /** @nullable */
+  acknowledgedAt: string | null;
+  /** @nullable */
+  acknowledgedBy: string | null;
+  /**
+     * How it will be investigated — shown to the person who raised it
+     * @nullable
+     */
+  acknowledgementNote: string | null;
+  /** @nullable */
+  outcome: AiChallengeOutcome;
+  /** @nullable */
+  resolutionNote: string | null;
+  /** @nullable */
+  resolvedAt: string | null;
+  /** @nullable */
+  resolvedBy: string | null;
+}
+
+export interface AiOutcomeWindow {
+  days: number;
+  faceScans: number;
+  faceScanFailures: number;
+  passwordSignIns: number;
+  signInsFlagged: number;
+  suggestionQueries: number;
+  suggestionsShown: number;
+  profileQueries: number;
+  securityAlerts: number;
+  challengesFiled: number;
+}
+
+export interface AiOversight {
+  systems: AiSystemStaffState[];
+  outcomes: AiOutcomeWindow[];
+  openChallenges: number;
 }
 
 export type ListSecurityLogsParams = {

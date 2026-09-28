@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useListPayments, useCreatePayment, useListPlans, useSubscribe, useRefundPayment, getListPaymentsQueryKey, getGetCurrentUserQueryKey, type PaymentInputCurrency } from '@workspace/api-client-react';
+import { useListPayments, useCreatePayment, useListPlans, useSubscribe, useRefundPayment, getListPaymentsQueryKey, getGetCurrentUserQueryKey, PaymentInputCurrency } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Badge, Button, Card, Input, Label } from '../components/ui';
@@ -206,7 +206,7 @@ function SubscriptionPlans() {
               <Button
                 className="w-full"
                 variant={isCurrent ? 'secondary' : 'default'}
-                disabled={isCurrent}
+                disabled={isCurrent || user?.paymentHold}
                 onClick={() => { setPendingPlanId(plan.id); setCard(EMPTY_CARD); setError(''); setIdempotencyKey(crypto.randomUUID()); }}
                 data-testid={`button-subscribe-${plan.id}`}
               >
@@ -261,6 +261,7 @@ function SubscriptionPlans() {
 
 export default function Payments() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { data: payments, isLoading } = useListPayments();
   const refundMutation = useRefundPayment();
   const [refundError, setRefundError] = useState('');
@@ -270,6 +271,8 @@ export default function Payments() {
     try {
       await refundMutation.mutateAsync({ id: paymentId });
       queryClient.invalidateQueries({ queryKey: getListPaymentsQueryKey() });
+      // Refunding a subscription payment takes its plan back.
+      queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
     } catch (err: any) {
       setRefundError(err?.data?.error || 'Refund failed.');
     }
@@ -323,6 +326,8 @@ export default function Payments() {
       case 'completed': return 'success';
       case 'failed': return 'destructive';
       case 'pending': return 'warning';
+      case 'disputed': return 'warning';
+      case 'charged_back': return 'destructive';
       default: return 'outline';
     }
   };
@@ -338,10 +343,16 @@ export default function Payments() {
           <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider mt-2">Transaction history and audit records</p>
         </div>
 
-        <Button onClick={() => { setShowModal(true); setIdempotencyKey(crypto.randomUUID()); }}>
+        <Button disabled={user?.paymentHold} onClick={() => { setShowModal(true); setIdempotencyKey(crypto.randomUUID()); }}>
           <Plus className="w-4 h-4 mr-2" /> Simulate Transaction
         </Button>
       </div>
+
+      {user?.paymentHold && (
+        <div className="border border-destructive/50 bg-destructive/10 p-4 font-mono text-xs text-destructive" data-testid="payment-hold-notice">
+          Payments are on hold for this account after a chargeback. Contact support to have the hold reviewed.
+        </div>
+      )}
 
       <SubscriptionPlans />
 
@@ -383,8 +394,11 @@ export default function Payments() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={getStatusColor(payment.status) as any}>
-                        {payment.status}
+                        {payment.status.replace('_', ' ')}
                       </Badge>
+                      {payment.status === 'disputed' && (
+                        <p className="text-muted-foreground font-mono text-[10px] mt-1 max-w-[16rem]">Chargeback open with the card issuer{payment.planId ? '; the plan is paused until it is decided' : ''}.</p>
+                      )}
                       {payment.status === 'failed' && payment.declineMessage && (
                         <p className="text-destructive font-mono text-[10px] mt-1 max-w-[16rem]">{payment.declineMessage}</p>
                       )}
@@ -454,9 +468,10 @@ export default function Payments() {
                         onChange={e => setCurrency(e.target.value as PaymentInputCurrency)}
                         className="flex h-10 w-full border border-border bg-input px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary font-mono uppercase"
                       >
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                        <option value="GBP">GBP</option>
+                        {/* Generated from the API spec's currency enum, so the form can't offer fewer (or more) than the API accepts. */}
+                        {Object.values(PaymentInputCurrency).map((code) => (
+                          <option key={code} value={code}>{code}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
