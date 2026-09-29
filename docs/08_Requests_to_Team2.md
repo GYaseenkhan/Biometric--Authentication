@@ -306,9 +306,3 @@ Still needed from Team 2 (the page says so where it applies):
 - A real, monitored privacy contact; `privacy@secureai.example` is a placeholder.
 - The APP 8 safeguards for storing Australian users' data in the United States, and legal review of the whole policy (docs/10).
 
-## 6. What Team 1 is _not_ asking for
-
-Not every "Team 2 decides" line in either brief needs a response before Team 1 can keep working — most of
-what's above already has a working, documented default in place. The one item that genuinely blocks
-further build work is §1's third-party-consent question: everything else here can proceed on the stated
-assumption and just get updated if Team 2's actual policy differs.
