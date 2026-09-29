@@ -21,8 +21,9 @@ declare const process: { env: Record<string, string | undefined> };
 // EXPO_PUBLIC_API_BASE_URL is inlined at build time (Expo's convention for
 // client-exposed env vars — anything prefixed EXPO_PUBLIC_ gets baked into
 // the JS bundle, same mechanism as Vite's VITE_ prefix). Set it when
-// building a release APK against a live deployed backend, e.g.:
-//   EXPO_PUBLIC_API_BASE_URL=https://secureai-api.onrender.com/api eas build ...
+// building a release APK against a live deployed backend, e.g. in a
+// git-ignored .env (see .env.example):
+//   EXPO_PUBLIC_API_BASE_URL=https://d2zb1uxt99m5ks.cloudfront.net/api
 // Falls back to the local-dev adb-reverse tunnel when unset.
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
