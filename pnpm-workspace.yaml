@@ -156,9 +156,19 @@ overrides:
   "@expo/ngrok-bin>@expo/ngrok-bin-sunos-x64": "-"
   "@expo/ngrok-bin>@expo/ngrok-bin-win32-ia32": "-"
   "@expo/ngrok-bin>@expo/ngrok-bin-win32-x64": "-"
-  # drizzle-kit uses esbuild internally on an older version that's vulnerable, this overrides it
+  # drizzle-kit uses esbuild internally on an older version that's vulnerable, this overrides it.
+  # 0.28.1 fixes the development server's arbitrary file read (pnpm audit, 2026-09-29).
   "@esbuild-kit/esm-loader": "npm:tsx@^4.21.0"
-  esbuild: "0.27.3"
+  esbuild: "0.28.2"
+  # Patched versions for advisories in transitive dependencies (pnpm audit, 2026-09-29).
+  # qs is Express's query-string parser, so it runs on every API request: denial of service via
+  # isBuffer, and an array-limit bypass. The rest are build and codegen tooling.
+  "qs@<6.16.0": "^6.16.0"
+  "fast-uri@<3.1.6": "^3.1.6" # orval codegen (ajv): host confusion, SSRF
+  "js-yaml@>=4.0.0 <4.3.2": "^4.3.2" # orval codegen: CPU exhaustion
+  "brace-expansion@>=4.0.0 <5.0.9": "^5.0.9" # orval's typedoc (minimatch): denial of service
+  "nanoid@<3.3.18": "^3.3.18" # postcss in the web build
+  "node-fetch@<2.6.7": "^2.6.7" # TensorFlow.js's Node.js fallback, unused in the browser
 
 allowBuilds:
   esbuild: true
