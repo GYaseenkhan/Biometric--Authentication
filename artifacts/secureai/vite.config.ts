@@ -3,13 +3,10 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
+// Local development defaults (README "Quick start"): port 5173, which is also the API's default
+// allowed origin (FRONTEND_PORT), served from "/". Deploys set both explicitly
+// (scripts/ops/deploy-web.mjs, amplify.yml).
+const rawPort = process.env.PORT || "5173";
 
 const port = Number(rawPort);
 
@@ -17,13 +14,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
+const basePath = process.env.BASE_PATH || "/";
 
 export default defineConfig({
   base: basePath,
