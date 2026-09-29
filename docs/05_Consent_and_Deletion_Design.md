@@ -433,12 +433,14 @@ are all unchanged by this — only the ranking mathematics improved.
    face is routed back to `/enroll` until it enrolls something.
 3. Backups are out of scope: this PoC has no backup/restore mechanism, so "does deletion also purge
    backups" isn't an answerable question here — a real deployment with backups would need an explicit
-   retention/purge policy for them too.
+   retention/purge policy for them too. Confirmed for the live site on 2026-09-30: the production database
+   has automated backups turned off (`04_Threat_Model_Risk_Assessment.md` R-DP-5, which recommends turning
+   them on; this limit then becomes a retention question for Team 2).
 4. Consent timestamps are evidence of consent, not a legal consent-management system:
-   `dataConsentAt`/`biometricConsentAt` support answering "did this user consent, and when" for an audit,
-   but this PoC has no versioned consent-text/policy tracking (e.g., which version of the privacy policy
-   they consented to) — a real system handling actual personal data would need that, and it's Team 2's
-   policy question to answer before Team 1 could build it.
+   `dataConsentAt`/`biometricConsentAt` support answering "did this user consent, and when" for an audit.
+   Which version of the privacy policy each person was shown is now recorded (§7, added 2026-09-26), but
+   the consent choices themselves are not tied to a versioned consent wording: the timestamp says when,
+   not which text. A real system handling actual personal data would version that wording too.
 
 ## 7. Privacy policy, acknowledgement and data export (added 2026-09-26)
 

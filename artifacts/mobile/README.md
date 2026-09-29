@@ -7,7 +7,7 @@ recorded in `docs/04` R-MOBILE-4 and `docs/06`. Building it needs macOS with Xco
 
 Device-native biometric MFA on Android/iOS, following the brief's actual design (decision #1):
 password (first factor) + a device biometric (second factor) that unlocks a key held in the device's
-secure hardware (Android Keystore), which signs a server-issued challenge. No app-captured face factor
+secure storage (Android Keystore; the Keychain on iOS), which signs a server-issued challenge. No app-captured face factor
 exists here — that's a deliberate difference from the web app, which keeps an additional face-descriptor
 factor as a documented departure from this same decision. Mobile follows the brief's design as-written.
 
@@ -77,7 +77,11 @@ work" claim — actually run.
 **Not a workspace member on purpose.** This package is excluded from the root `pnpm-workspace.yaml`
 (see the comment there) — it pins an older React (18.3.x) than the rest of the monorepo (19.x) needs,
 and sharing one pnpm graph caused real cross-package type resolution breakage the moment it was added.
-Install it independently, inside this folder, not from the repo root.
+Install it independently, inside this folder, not from the repo root. Its own `pnpm-workspace.yaml`
+makes this folder a separate pnpm root, so a plain `pnpm install` here stays isolated, and repeats the
+root's supply-chain settings (7-day minimum release age, no git/tarball dependencies,
+`trustPolicy: no-downgrade`), with overrides for the build-tooling advisories and two exact-version
+trust-policy exceptions, each explained in that file (R-SUPPLY-5).
 
 ## Full page set (not just an MFA demo anymore)
 
@@ -106,6 +110,15 @@ enforced server-side (frontend checks are convenience only, same as web):
   `expo-av`, judged not worth a 4th native dependency) — Share still works for those.
 - **Data Protection** (`DataProtectionScreen.tsx`) — static reference content, ported verbatim from
   web's hardcoded `ROWS` array.
+- **Privacy & Your Data** (`PrivacyScreen.tsx`, added 2026-09-27) — the same rights as web: read and
+  acknowledge the privacy policy (a banner in `AppShell.tsx` appears when its version changes), change
+  the optional consents, download a copy of your data, delete the account. Open to every signed-in
+  account, including one still setting up sign-in or awaiting a guardian.
+- **Sign-up** (`RegisterScreen.tsx`) asks exactly what the web form asks: date of birth (and a
+  guardian's email under 18), the data consent as an unticked box, the optional training consent, and
+  the privacy policy, whose version it sends. Before 2026-09-27 it sent `dataConsent: true` without
+  asking (R-CONSENT-4). An under-18 account waits on `AwaitingGuardianView` (`App.tsx`) until the
+  guardian confirms by email.
 
 **Navigation**: a custom slide-out menu (`src/navigation/AppShell.tsx`), not `react-navigation` —
 deliberately, to avoid another native dependency + rebuild cycle for what's fundamentally just "show one
@@ -121,12 +134,27 @@ minimize the risk of a repeat of Blocker 2's real AGP/Kotlin incompatibility. Re
 
 ```bash
 cd artifacts/mobile
-pnpm install --ignore-workspace   # NOT plain `pnpm install` from here — see note above
-npx expo install --fix            # aligns react/react-native/@types versions to what Expo SDK 52 expects
-npx expo prebuild --platform android
+pnpm install                      # this folder is its own pnpm root (see note above); pnpm 10 or 11
 npx expo run:android              # or open android/ in Android Studio directly
 npx expo start --dev-client       # separately, for the Metro bundler (see "Running it" below)
 ```
+
+The `android/` and `ios/` native projects are committed, so `expo prebuild` is not needed; re-running it
+would overwrite hand-made native changes (the certificate pinning config, the `ExpoModulesPackage` shim
+in Blocker 4, the backup exclusion rules).
+
+**Pointing a build at the live API:** create `artifacts/mobile/.env` (git-ignored; copy
+`.env.example`). Expo inlines `EXPO_PUBLIC_*` values into the bundle at build time:
+
+```bash
+EXPO_PUBLIC_API_BASE_URL=https://d2zb1uxt99m5ks.cloudfront.net/api
+EXPO_PUBLIC_APP_ORIGIN=https://secureai-mobile.app   # must be on the API's FRONTEND_ORIGINS list
+```
+
+Without it the app uses `http://localhost:8080/api` (see "Running it"). A release APK for a phone:
+`cd android && ./gradlew app:assembleRelease` (from a short path, Blocker 3).
+
+**iOS** needs macOS with Xcode and CocoaPods: `cd ios && pod install`, then `npx expo run:ios`.
 
 **IMPORTANT — your project's folder path must be short.** See Blocker 3 below. If you're at a long
 path (anything similarly deep to `C:\Users\you\SomeVeryLongProjectFolderName\...`), move or fresh-copy
@@ -206,12 +234,13 @@ npx expo start --dev-client
 adb reverse tcp:8081 tcp:8081   # if the app was already installed via run:android separately
 ```
 
-Verified live: password register and login both round-trip against the real API server. `src/config.ts`
-points `API_BASE_URL` at the dev machine's LAN IP (e.g. `http://192.168.1.150:8080/api`) so a real
-physical device on the same WiFi network can reach it directly — no tunnel needed, since the biometric-
-key endpoints have no origin/RP-ID trust requirement beyond ordinary CORS. From an emulator instead, use
-`http://10.0.2.2:8080/api` (the special host-loopback alias). Re-point the LAN IP if your network
-changes (`ipconfig` → IPv4 Address).
+Verified live: password register and login both round-trip against the real API server. Without a
+`.env`, `src/config.ts` uses `http://localhost:8080/api`, reached from a USB-connected phone through
+`adb reverse tcp:8080 tcp:8080` (a LAN IP was used at first, and failed on campus WiFi, where the
+laptop and phone sat on isolated networks; the comment in `config.ts` has the details). No tunnel
+domain is needed, since the biometric-key endpoints have no origin/RP-ID trust requirement beyond
+ordinary CORS. From an emulator instead, use `http://10.0.2.2:8080/api` (the special host-loopback
+alias).
 
 **Full device biometric enrollment and login round-trip confirmed on a real physical phone** (iQOO Neo7
 Pro): register → `BiometricPrompt` fires during `createSignature()` → key registers with the backend →
@@ -348,20 +377,26 @@ biometricKeysTable row exists` — any one factor satisfies it. This is what let
   without either being locked out by a factor it has no way to satisfy. See
   `docs/04_Threat_Model_Risk_Assessment.md`.
 - **Signing algorithm**: RSA-2048, PKCS#1 v1.5 padding, SHA-256 digest (`SHA256withRSA` on the Android
-  side via `react-native-biometrics`; `crypto.verify('RSA-SHA256', ...)` with the public key imported as
-  DER/SPKI on the server side — see `verifyBiometricSignature()` in `routes/biometricKey.ts`). Confirmed
-  to match by reading `react-native-biometrics`' actual native Android source, not assumed from its docs.
+  side via `react-native-biometrics`, `kSecKeyAlgorithmRSASignatureMessagePKCS1v15SHA256` on iOS;
+  `crypto.verify('RSA-SHA256', ...)` with the public key imported as DER/SPKI on the server side — see
+  `verifyBiometricSignature()` in `routes/biometricKey.ts`). Confirmed to match by reading
+  `react-native-biometrics`' actual native Android and iOS source, not assumed from its docs.
 - **`allowDeviceCredentials: false`** (`src/lib/biometricKey.ts`) — only a real biometric (fingerprint /
   face) unlocks the key, not a PIN/pattern fallback. Matches the same "gate a crypto operation with an
   actual biometric" intent as the WebAuthn passkey path this replaces.
 - **Certificate pinning (Android release builds only)** —
   `android/app/src/main/res/xml/network_security_config.xml`, wired via `android:networkSecurityConfig`
-  in the release manifest. Pins the production API domain's SPKI hash so a device with a rogue/compromised
-  CA in its trust store can't MITM the app even over otherwise-valid TLS. Debug builds are unaffected
-  (`src/debug/AndroidManifest.xml`'s cleartext override still applies for the local `adb reverse` tunnel).
-  The pin values are placeholders — see the comment block at the top of that file for exactly how to
-  compute real ones once a production domain is deployed. No iOS project exists yet in this PoC, so iOS
-  pinning (`NSPinnedDomains` in `Info.plist`, or a config plugin) isn't implemented.
+  in the release manifest. Pins `d2zb1uxt99m5ks.cloudfront.net` (the live site and API) to three real SPKI
+  hashes (the current certificate, its intermediate, and Amazon Root CA 1 as a last resort) with a
+  pin-set expiry of 2027-03-01, so a device with a rogue/compromised CA in its trust store can't MITM the
+  app even over otherwise-valid TLS. The comment block at the top of that file records how the pins were
+  computed, the 2026-09-18 rotation that made the first pin set stale, and how to re-verify before the
+  expiry. Debug builds are unaffected (`src/debug/AndroidManifest.xml`'s cleartext
+  override still applies for the local `adb reverse` tunnel). iOS has no pinning yet (`docs/04`
+  R-MOBILE-4).
+- **App data kept out of backups (Android)** — `android:allowBackup="false"` plus
+  `res/xml/data_extraction_rules.xml`, so neither a cloud backup nor a device-to-device transfer copies
+  the session cookie or app data to another phone (added 2026-09-29, `docs/04` R-MOBILE-3).
 
 ## UI: styled to match the web app, not just functionally equivalent
 
