@@ -87,6 +87,20 @@ scope).
 | Privacy rights available in the app          | Met    | Added 2026-09-27: Privacy & Your Data screen: acknowledge the policy (banner when it changes), change the optional consents, download a copy of your data, delete the account                                                                                                                                        |
 | Data minimization in what's requested/stored | Met    | No location, contacts, or media-library-wide access requested; upload feature uses `expo-document-picker`'s scoped file picker, not broad storage access                                                                                                                                                             |
 
+## iOS (added 2026-09-29)
+
+The native iOS project (PR #18, Sadhakshi) runs the same shared code, so most of this checklist
+carries over. The table above scores the Android build; iOS differs in these rows (docs/04 R-MOBILE-4):
+
+| Control                                | iOS     | Detail                                                                                                                                                |
+| -------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Certificate pinning                    | Gap     | Not implemented on iOS; Android pins the live API's key                                                                                               |
+| Key invalidated when biometrics change | Gap     | `react-native-biometrics` uses `kSecAccessControlBiometryAny` on iOS, so a newly enrolled face or fingerprint can use the key; Android invalidates it |
+| Key in hardware-isolated storage       | Partial | RSA-2048 in the Keychain, device-only and biometric-gated; not the Secure Enclave, which only holds P-256 keys                                        |
+| Biometric only, no passcode fallback   | Met     | `allowDeviceCredentials: false`, so the key opens with Face ID or Touch ID only                                                                       |
+| Cleartext traffic                      | Partial | ATS blocks it, except local-network addresses, in release builds too                                                                                  |
+| Tested on real hardware                | Gap     | iPhone Simulator against the local API only                                                                                                           |
+
 ## Summary
 
 | Category   | Met | Partial | Gap | N/A |

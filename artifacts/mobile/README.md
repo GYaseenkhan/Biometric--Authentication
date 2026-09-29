@@ -1,5 +1,10 @@
 # SecureAI Mobile
 
+**iOS:** the native iOS project was added on 2026-09-29 (PR #18, Sadhakshi) and has been tested in the
+iPhone Simulator against the local API. It runs the same code; where it is weaker than Android
+(no certificate pinning, key not invalidated by new biometrics, Keychain rather than Secure Enclave) is
+recorded in `docs/04` R-MOBILE-4 and `docs/06`. Building it needs macOS with Xcode and CocoaPods.
+
 Device-native biometric MFA on Android/iOS, following the brief's actual design (decision #1):
 password (first factor) + a device biometric (second factor) that unlocks a key held in the device's
 secure hardware (Android Keystore), which signs a server-issued challenge. No app-captured face factor
