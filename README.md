@@ -39,14 +39,33 @@ Built as a student deliverable for **Team 1 (Technical Security)**, per the cour
 
 ## Quick start
 
-```bash
-pnpm install
-cp .env.example .env                       # fill in DATABASE_URL and SESSION_SECRET
-pnpm --filter @workspace/db run push       # create the tables
+**You need:** [Node.js](https://nodejs.org) 22.12 or later (the live site runs 24), pnpm 10
+(`npm install -g pnpm@10`), and PostgreSQL running locally (tested with 17; the live site runs 18).
+Works on Windows, macOS and Linux.
 
-pnpm --filter @workspace/api-server run dev   # API on :8080 (seeds the demo accounts into an empty database)
-pnpm --filter @workspace/secureai run dev     # web app
-```
+1. Create an empty database, e.g. `createdb secureai` (or in `psql`: `CREATE DATABASE secureai;`).
+2. Install and configure:
+
+   ```bash
+   git clone https://github.com/choudharyprafful/Biometric-Authentication.git
+   cd Biometric-Authentication
+   pnpm install
+   cp .env.example .env        # Windows cmd: copy .env.example .env
+   ```
+
+   In `.env`, set `DATABASE_URL` to your database (e.g.
+   `postgresql://postgres:yourpassword@localhost:5432/secureai`) and `SESSION_SECRET` to any long random
+   string. Leave the rest as they are for local use.
+
+3. Create the tables, then start the API and, in a second terminal, the web app:
+
+   ```bash
+   pnpm --filter @workspace/db run push           # create the tables
+   pnpm --filter @workspace/api-server run dev    # API on http://localhost:8080; seeds the demo accounts
+   pnpm --filter @workspace/secureai run dev      # web app on http://localhost:5173
+   ```
+
+4. Open <http://localhost:5173> and sign in with a demo account below.
 
 **Environment variables** for the API (see [`.env.example`](.env.example)):
 
@@ -54,6 +73,8 @@ pnpm --filter @workspace/secureai run dev     # web app
 | ------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`                                                                  | Yes        | Postgres connection string                                                                                                                                                                                                  |
 | `SESSION_SECRET`                                                                | Yes        | express-session secret                                                                                                                                                                                                      |
+| `PORT`                                                                          | Yes        | Port the API listens on (`8080` in `.env.example`; the web app's development server forwards `/api` to it)                                                                                                                  |
+| `NODE_ENV`                                                                      | Local      | `development` locally (`.env.example`), which also returns password-reset and guardian links in the API response so they work without email; `production` in a deployment                                                   |
 | `FILE_ENCRYPTION_KEY`                                                           | Production | AES-256 key (64 hex characters) for face templates, uploads and payment tokens at rest. Unset, a key derived from `SESSION_SECRET` is used (local development only)                                                         |
 | `FILE_ENCRYPTION_KEY_ID`                                                        | No         | Name of the current key, stored with every encrypted value (default `k1`). To rotate: set a new key under a new ID, move the old one to `FILE_ENCRYPTION_PREVIOUS_KEYS`, and the API re-encrypts in the background (R-DP-3) |
 | `FILE_ENCRYPTION_PREVIOUS_KEYS`                                                 | No         | Older keys still needed for reading, `k1:<hex>,k0:<hex>`; remove one once the `ENCRYPTION_KEY_ROTATED` audit event reports nothing left on it                                                                               |
@@ -77,7 +98,7 @@ pnpm --filter @workspace/secureai run dev     # web app
 
 None start MFA-enrolled — visit `/enroll` after logging in to set up face and/or passkey. The same accounts were seeded into the live site's database; treat this password as public there (docs/04 R-AUTH-9).
 
-For the mobile app, see [`artifacts/mobile/README.md`](artifacts/mobile/README.md). For the AI/ML PoC: `python3 artifacts/ai-model/model_starter.py` (pure Python, no install step).
+For the mobile app, see [`artifacts/mobile/README.md`](artifacts/mobile/README.md). For the AI/ML PoC: `python3 artifacts/ai-model/model_starter.py` (`python` on Windows; Python 3, pure standard library, no install step).
 
 ## Testing and checks
 
