@@ -18,3 +18,4 @@ attached_assets/
 pnpm-lock.yaml
 artifacts/mobile/pnpm-lock.yaml
 artifacts/mobile/android/
+artifacts/mobile/ios/
