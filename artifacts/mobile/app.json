@@ -12,7 +12,10 @@
       "allowBackup": false
     },
     "ios": {
-      "bundleIdentifier": "com.secureai.mobile"
+      "bundleIdentifier": "com.secureai.mobile",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "SecureAI uses Face ID to securely verify your identity and unlock your device biometric key."
+      }
     }
   }
 }
