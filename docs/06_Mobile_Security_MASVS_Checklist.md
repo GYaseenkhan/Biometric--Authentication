@@ -19,13 +19,14 @@ scope).
 
 ## MASVS-STORAGE — sensitive data at rest on the device
 
-| Control                                                             | Status | Detail                                                                                                                                                                                                             |
-| ------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| No sensitive data in shared/world-readable storage                  | Met    | No `AsyncStorage`, no plain-file writes of session/credential data anywhere in `artifacts/mobile/src` — verified by grep, not just design intent                                                                   |
-| Session/auth tokens stored via a secure mechanism                   | Met    | Session lives entirely in the native cookie jar (`@react-native-cookies/cookies`, backed by the OS's own HTTP stack), the same mechanism a mobile browser uses — never touches app-controlled storage              |
-| Cryptographic keys stored in hardware-backed storage, not app files | Met    | The biometric signing key lives in Android Keystore (`react-native-biometrics`), hardware-backed on any device with StrongBox/TEE support — the app never sees the private key material, only signature output     |
-| No decrypted copies left on the device                              | Met    | Added 2026-09-27. A downloaded upload and a data export are written to the app's cache only to hand them to the share sheet, and deleted when it closes; before, a downloaded upload stayed in the cache decrypted |
-| No sensitive data in logs                                           | Met    | No `console.log`/logging of descriptors, tokens, or passwords in the mobile client; mirrors the same audit already done server-side for `logEvent` call sites (`04`, Logging section)                              |
+| Control                                                             | Status | Detail                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No sensitive data in shared/world-readable storage                  | Met    | No `AsyncStorage`, no plain-file writes of session/credential data anywhere in `artifacts/mobile/src` — verified by grep, not just design intent                                                                                                                                                                                    |
+| Session/auth tokens stored via a secure mechanism                   | Met    | Session lives entirely in the native cookie jar (`@react-native-cookies/cookies`, backed by the OS's own HTTP stack), the same mechanism a mobile browser uses — never touches app-controlled storage                                                                                                                               |
+| Cryptographic keys stored in hardware-backed storage, not app files | Met    | The biometric signing key lives in Android Keystore (`react-native-biometrics`), hardware-backed on any device with StrongBox/TEE support — the app never sees the private key material, only signature output                                                                                                                      |
+| App data excluded from backup and device transfer                   | Met    | Added 2026-09-29 (docs/04 R-MOBILE-3). `allowBackup` was `true`, so a backup or a move to a new phone could copy the session cookie. Now `allowBackup="false"` plus `dataExtractionRules` excluding every domain from cloud backup and device transfer (Android 12+ ignores `allowBackup` for device transfer); verified on a phone |
+| No decrypted copies left on the device                              | Met    | Added 2026-09-27. A downloaded upload and a data export are written to the app's cache only to hand them to the share sheet, and deleted when it closes; before, a downloaded upload stayed in the cache decrypted                                                                                                                  |
+| No sensitive data in logs                                           | Met    | No `console.log`/logging of descriptors, tokens, or passwords in the mobile client; mirrors the same audit already done server-side for `logEvent` call sites (`04`, Logging section)                                                                                                                                               |
 
 ## MASVS-CRYPTO — cryptography
 
@@ -90,7 +91,7 @@ scope).
 
 | Category   | Met | Partial | Gap | N/A |
 | ---------- | --- | ------- | --- | --- |
-| STORAGE    | 5   | 0       | 0   | 0   |
+| STORAGE    | 6   | 0       | 0   | 0   |
 | CRYPTO     | 2   | 0       | 0   | 0   |
 | AUTH       | 5   | 0       | 0   | 0   |
 | NETWORK    | 4   | 0       | 0   | 0   |
