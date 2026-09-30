@@ -10,7 +10,10 @@
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "ci": "pnpm run typecheck && pnpm audit --audit-level=critical",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "setup:local": "node scripts/setup-local.mjs",
+    "dev:api": "pnpm --filter @workspace/api-server run dev",
+    "dev:web": "pnpm --filter @workspace/secureai run dev"
   },
   "private": true,
   "devDependencies": {

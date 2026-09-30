@@ -39,33 +39,133 @@ Built as a student deliverable for **Team 1 (Technical Security)**, per the cour
 
 ## Quick start
 
-**You need:** [Node.js](https://nodejs.org) 22.12 or later (the live site runs 24), pnpm 10
-(`npm install -g pnpm@10`), and PostgreSQL running locally (tested with 17; the live site runs 18).
-Works on Windows, macOS and Linux.
+Runs the whole project on your own computer: the API, the web app, and a local database with demo
+accounts. Copy each box into a terminal as it is; nothing needs editing. The first time takes about 10
+minutes, mostly downloads. These exact commands are tested on Windows, macOS and Linux on every change
+to them ([`quickstart.yml`](.github/workflows/quickstart.yml)).
 
-1. Create an empty database, e.g. `createdb secureai` (or in `psql`: `CREATE DATABASE secureai;`).
-2. Install and configure:
+### Step 1 — Install the tools (once per computer)
 
-   ```bash
-   git clone https://github.com/choudharyprafful/Biometric-Authentication.git
-   cd Biometric-Authentication
-   pnpm install
-   cp .env.example .env        # Windows cmd: copy .env.example .env
-   ```
+Node.js, Git, PostgreSQL and pnpm. Skip any you already have; if your PostgreSQL has a different
+password, see step 2.
 
-   In `.env`, set `DATABASE_URL` to your database (e.g.
-   `postgresql://postgres:yourpassword@localhost:5432/secureai`) and `SESSION_SECRET` to any long random
-   string. Leave the rest as they are for local use.
+**Windows.** Open **Command Prompt** (not PowerShell, whose default settings block `npm` and `pnpm`) and
+run the following. Windows will ask for permission for the PostgreSQL installer.
 
-3. Create the tables, then start the API and, in a second terminal, the web app:
+<!-- quickstart:windows-install -->
 
-   ```bash
-   pnpm --filter @workspace/db run push           # create the tables
-   pnpm --filter @workspace/api-server run dev    # API on http://localhost:8080; seeds the demo accounts
-   pnpm --filter @workspace/secureai run dev      # web app on http://localhost:5173
-   ```
+```bat
+winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+winget install -e --id Git.Git --accept-source-agreements --accept-package-agreements
+winget install -e --id PostgreSQL.PostgreSQL.17 --custom "--superpassword postgres" --accept-source-agreements --accept-package-agreements
+```
 
-4. Open <http://localhost:5173> and sign in with a demo account below.
+Then **close Command Prompt and open a new one**, so it finds the programs just installed, and run:
+
+<!-- quickstart:windows-pnpm -->
+
+```bat
+npm install -g pnpm@10
+```
+
+**macOS.** Needs [Homebrew](https://brew.sh) (install it first if `brew` isn't found, and run the "Next
+steps" it prints). Then, in Terminal:
+
+<!-- quickstart:macos-install -->
+
+```bash
+brew install node git postgresql@17
+brew services start postgresql@17
+npm install -g pnpm@10
+```
+
+**Linux (Ubuntu or Debian).** In a terminal:
+
+<!-- quickstart:linux-install -->
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git curl postgresql
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+sudo apt-get install -y nodejs
+sudo npm install -g pnpm@10
+sudo systemctl start postgresql
+sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres'"
+```
+
+(On WSL without systemd, use `sudo service postgresql start` instead of `systemctl`.)
+
+### Step 2 — Get the code and set it up (once)
+
+**Windows and Linux** (PostgreSQL user `postgres`, password `postgres`, as installed in step 1):
+
+<!-- quickstart:setup -->
+
+```bash
+git clone https://github.com/choudharyprafful/Biometric-Authentication.git
+cd Biometric-Authentication
+pnpm install
+pnpm run setup:local postgresql://postgres:postgres@localhost:5432/secureai
+```
+
+**macOS** (Homebrew's PostgreSQL signs you in as your own user, with no password):
+
+<!-- quickstart:setup-macos -->
+
+```bash
+git clone https://github.com/choudharyprafful/Biometric-Authentication.git
+cd Biometric-Authentication
+pnpm install
+pnpm run setup:local "postgresql://$(whoami)@localhost:5432/secureai"
+```
+
+`setup:local` creates the `secureai` database, writes `.env` (your database address, a random session
+secret, everything else from `.env.example`) and creates the tables. It is safe to run again. If your
+PostgreSQL password isn't `postgres`, put yours in the address:
+`postgresql://postgres:YOUR_PASSWORD@localhost:5432/secureai`.
+
+### Step 3 — Run it
+
+In the same window (it is already in the `Biometric-Authentication` folder), start the API:
+
+<!-- quickstart:run-api -->
+
+```bash
+pnpm run dev:api
+```
+
+Leave it running. Open a **second** terminal window and start the web app:
+
+<!-- quickstart:run-web -->
+
+```bash
+cd Biometric-Authentication
+pnpm run dev:web
+```
+
+Open <http://localhost:5173> and sign in as `admin_user@prafful.com` with password `Password123!` (the
+other demo accounts are listed below). The demo accounts have no second factor yet, so the app first
+asks you to set one up: a passkey (Windows Hello, Touch ID, or your phone) or your face (a webcam).
+
+To stop, press `Ctrl+C` in each window. **Next time**, only step 3 is needed: open two terminals and run
+`cd Biometric-Authentication`, then `pnpm run dev:api` in one and `pnpm run dev:web` in the other.
+
+### If something goes wrong
+
+| What you see                                                            | What to do                                                                                                                                                                                           |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'winget' is not recognized`                                            | Install **App Installer** from the Microsoft Store, then open a new Command Prompt                                                                                                                   |
+| winget says PostgreSQL is `already installed`                           | You already have PostgreSQL 17. Use its password in the step 2 address, and if step 2 says nothing is answering, start it (next rows)                                                                |
+| `'node'`, `'npm'` or `'pnpm'` is not recognized, or `command not found` | Close the terminal and open a new one, so it picks up the newly installed programs                                                                                                                   |
+| `npm.ps1 cannot be loaded because running scripts is disabled`          | You are in PowerShell. Use Command Prompt, or run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once                                                                                         |
+| `Setup stopped: nothing is answering at localhost:5432`                 | PostgreSQL isn't running. Windows: restart the computer, or run `net start postgresql-x64-17` as administrator. macOS: `brew services start postgresql@17`. Linux: `sudo systemctl start postgresql` |
+| `Setup stopped: PostgreSQL refused the password`                        | Use the password you chose when you installed PostgreSQL, in the address in step 2                                                                                                                   |
+| `Port 5173 is already in use`, or `EADDRINUSE` for 8080                 | Another program (or an earlier run) is using the port. Close it; for the API you can also set another `PORT` in `.env`                                                                               |
+| Sign-in page shows an error or never loads data                         | The API isn't running: check the first window for an error, and that `pnpm run dev:api` is still running                                                                                             |
+
+**Doing it by hand instead:** copy `.env.example` to `.env`, set `DATABASE_URL` to an empty database and
+`SESSION_SECRET` to a long random string, run `pnpm --filter @workspace/db run push` to create the tables,
+then step 3.
 
 **Environment variables** for the API (see [`.env.example`](.env.example)):
 
