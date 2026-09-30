@@ -62,6 +62,9 @@ export async function ensureDeletionAuditTrigger(): Promise<void> {
 
     logger.info("Deletion audit trigger on security_logs ensured");
   } catch (err) {
-    logger.warn({ err }, "Failed to ensure deletion audit trigger — deletions of security_logs rows won't be tracked");
+    logger.warn(
+      { err },
+      "Failed to ensure deletion audit trigger — deletions of security_logs rows won't be tracked",
+    );
   }
 }

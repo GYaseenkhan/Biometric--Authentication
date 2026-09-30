@@ -1513,7 +1513,14 @@ components:
 
     SuggestedActionResult:
       type: object
-      required: [suggestion, distinctUsersSupporting, modelTrainedFromUsers, contextDepth, disabled]
+      required:
+        [
+          suggestion,
+          distinctUsersSupporting,
+          modelTrainedFromUsers,
+          contextDepth,
+          disabled,
+        ]
       properties:
         suggestion:
           description: Predicted next event type, or null if nothing cleared the minimum-distinct-users threshold (or the account has no activity yet)
@@ -1534,7 +1541,23 @@ components:
 
     User:
       type: object
-      required: [id, email, name, role, faceEnrolled, passkeyEnrolled, dataConsentGiven, biometricConsentGiven, parentConsentPending, trainingConsentGiven, contentPersonalizationConsentGiven, subscriptionPlan, paymentHold, createdAt]
+      required:
+        [
+          id,
+          email,
+          name,
+          role,
+          faceEnrolled,
+          passkeyEnrolled,
+          dataConsentGiven,
+          biometricConsentGiven,
+          parentConsentPending,
+          trainingConsentGiven,
+          contentPersonalizationConsentGiven,
+          subscriptionPlan,
+          paymentHold,
+          createdAt,
+        ]
       properties:
         id:
           type: number
@@ -1587,6 +1610,7 @@ components:
         name:
           type: string
           minLength: 1
+          maxLength: 100
         password:
           type: string
           minLength: 8
@@ -1621,7 +1645,8 @@ components:
 
     LoginResponse:
       type: object
-      required: [requiresFaceVerification, faceAvailable, passkeyAvailable, user]
+      required:
+        [requiresFaceVerification, faceAvailable, passkeyAvailable, user]
       properties:
         requiresFaceVerification:
           description: True when a second verification step (face or passkey) is required
@@ -1689,6 +1714,7 @@ components:
         name:
           type: string
           minLength: 1
+          maxLength: 100
         role:
           type: string
           enum: [user, admin, security_analyst, it_support]
@@ -1702,7 +1728,17 @@ components:
 
     SecurityDashboard:
       type: object
-      required: [totalUsers, faceEnrolledUsers, activeSessionsCount, loginAttempts24h, failedLogins24h, threatsDetected, recentLogs, activeAlerts]
+      required:
+        [
+          totalUsers,
+          faceEnrolledUsers,
+          activeSessionsCount,
+          loginAttempts24h,
+          failedLogins24h,
+          threatsDetected,
+          recentLogs,
+          activeAlerts,
+        ]
       properties:
         totalUsers:
           type: number
@@ -1818,7 +1854,8 @@ components:
 
     ChainRestoreResult:
       type: object
-      required: [restored, restoredCount, restoredIds, unrecoverableIds, verification]
+      required:
+        [restored, restoredCount, restoredIds, unrecoverableIds, verification]
       properties:
         restored:
           type: boolean
@@ -1839,7 +1876,18 @@ components:
 
     DeletionAuditEntry:
       type: object
-      required: [id, deletedLogId, eventType, details, deletedByAppActor, deletedByDbRole, deletedByClientAddr, deletedAt, currentlyRestored]
+      required:
+        [
+          id,
+          deletedLogId,
+          eventType,
+          details,
+          deletedByAppActor,
+          deletedByDbRole,
+          deletedByClientAddr,
+          deletedAt,
+          currentlyRestored,
+        ]
       properties:
         id:
           type: number
@@ -1865,7 +1913,17 @@ components:
 
     Payment:
       type: object
-      required: [id, userId, amount, currency, status, description, providerToken, createdAt]
+      required:
+        [
+          id,
+          userId,
+          amount,
+          currency,
+          status,
+          description,
+          providerToken,
+          createdAt,
+        ]
       properties:
         id:
           type: number
@@ -2076,7 +2134,15 @@ components:
       properties:
         type:
           type: string
-          enum: [payment.completed, payment.failed, payment.refunded, payment.disputed, payment.dispute_won, payment.dispute_lost]
+          enum:
+            [
+              payment.completed,
+              payment.failed,
+              payment.refunded,
+              payment.disputed,
+              payment.dispute_won,
+              payment.dispute_lost,
+            ]
         paymentId:
           type: number
 
@@ -2092,7 +2158,18 @@ components:
 
     UploadMeta:
       type: object
-      required: [id, userId, fileName, mimeType, fileType, sizeBytes, createdAt, contentSource, trainingEligible]
+      required:
+        [
+          id,
+          userId,
+          fileName,
+          mimeType,
+          fileType,
+          sizeBytes,
+          createdAt,
+          contentSource,
+          trainingEligible,
+        ]
       properties:
         id:
           type: number
@@ -2115,7 +2192,15 @@ components:
             Acceptability Matrix. "unspecified" is the fail-closed default for
             an upload that never declared one.
           type: string
-          enum: [own_work, third_party_individual, published_work, social_media, incidental_third_party_ip, unspecified]
+          enum:
+            [
+              own_work,
+              third_party_individual,
+              published_work,
+              social_media,
+              incidental_third_party_ip,
+              unspecified,
+            ]
         trainingEligible:
           description: >-
             Whether the matrix admits this file into a training corpus, given
@@ -2129,7 +2214,17 @@ components:
 
     UploadContent:
       type: object
-      required: [id, userId, fileName, mimeType, fileType, sizeBytes, createdAt, dataBase64]
+      required:
+        [
+          id,
+          userId,
+          fileName,
+          mimeType,
+          fileType,
+          sizeBytes,
+          createdAt,
+          dataBase64,
+        ]
       properties:
         id:
           type: number
@@ -2172,7 +2267,15 @@ components:
             "unspecified", which keeps the file fully usable by its owner but
             excludes it from every training corpus until a source is declared.
           type: string
-          enum: [own_work, third_party_individual, published_work, social_media, incidental_third_party_ip, unspecified]
+          enum:
+            [
+              own_work,
+              third_party_individual,
+              published_work,
+              social_media,
+              incidental_third_party_ip,
+              unspecified,
+            ]
     AiSecurityReport:
       type: object
       required: [live, poc]
@@ -2192,7 +2295,8 @@ components:
           type: string
         thresholds:
           type: object
-          required: [minDistinctUsers, maxEventsPerUser, maxDistinctTransitionsPerUser]
+          required:
+            [minDistinctUsers, maxEventsPerUser, maxDistinctTransitionsPerUser]
           properties:
             minDistinctUsers:
               type: number
@@ -2214,7 +2318,8 @@ components:
           type: boolean
     AiValidationTest:
       type: object
-      required: [id, title, mirrors, attack, baseline, secureai, probes, verdict, note]
+      required:
+        [id, title, mirrors, attack, baseline, secureai, probes, verdict, note]
       properties:
         id:
           type: string
@@ -2272,7 +2377,20 @@ components:
     AiPocStarterKit:
       description: Yaseen's model_starter.py, run unmodified
       type: object
-      required: [script, author, sha256, corpus, consentGate, vulnerable, hardened, extractionTests, benign, deletion, console]
+      required:
+        [
+          script,
+          author,
+          sha256,
+          corpus,
+          consentGate,
+          vulnerable,
+          hardened,
+          extractionTests,
+          benign,
+          deletion,
+          console,
+        ]
       properties:
         script:
           type: string
@@ -2374,7 +2492,19 @@ components:
     AiPocMemorisation:
       description: Sadhakshi's memorisation_leakage_model.py, run unmodified
       type: object
-      required: [script, author, sha256, records, vulnerable, duplicatesRemoved, hardened, benign, verdict, console]
+      required:
+        [
+          script,
+          author,
+          sha256,
+          records,
+          vulnerable,
+          duplicatesRemoved,
+          hardened,
+          benign,
+          verdict,
+          console,
+        ]
       properties:
         script:
           type: string
@@ -2408,10 +2538,38 @@ components:
           type: string
     AiSystemId:
       type: string
-      enum: [face-recognition, liveness, login-risk, behaviour-suggestions, content-personalisation, anomaly-alerts]
+      enum:
+        [
+          face-recognition,
+          liveness,
+          login-risk,
+          behaviour-suggestions,
+          content-personalisation,
+          anomaly-alerts,
+        ]
     AiSystemEntry:
       type: object
-      required: [id, name, kind, purpose, whyAi, decides, dataUsed, runsWhere, humanOversight, howToChallenge, knownLimits, riskRefs, accountableOwner, oversightRole, switchable, switchNote, enabled, stateChangedAt]
+      required:
+        [
+          id,
+          name,
+          kind,
+          purpose,
+          whyAi,
+          decides,
+          dataUsed,
+          runsWhere,
+          humanOversight,
+          howToChallenge,
+          knownLimits,
+          riskRefs,
+          accountableOwner,
+          oversightRole,
+          switchable,
+          switchNote,
+          enabled,
+          stateChangedAt,
+        ]
       properties:
         id:
           $ref: "#/components/schemas/AiSystemId"
@@ -2477,7 +2635,17 @@ components:
           maxLength: 500
     AiSystemStaffState:
       type: object
-      required: [id, name, switchable, switchNote, enabled, changedAt, changedBy, reason]
+      required:
+        [
+          id,
+          name,
+          switchable,
+          switchNote,
+          enabled,
+          changedAt,
+          changedBy,
+          reason,
+        ]
       properties:
         id:
           $ref: "#/components/schemas/AiSystemId"
@@ -2536,7 +2704,26 @@ components:
           maxLength: 1000
     AiChallenge:
       type: object
-      required: [id, systemId, systemName, reference, message, submittedAt, submittedBy, status, acknowledgeBy, overdue, acknowledgedAt, acknowledgedBy, acknowledgementNote, outcome, resolutionNote, resolvedAt, resolvedBy]
+      required:
+        [
+          id,
+          systemId,
+          systemName,
+          reference,
+          message,
+          submittedAt,
+          submittedBy,
+          status,
+          acknowledgeBy,
+          overdue,
+          acknowledgedAt,
+          acknowledgedBy,
+          acknowledgementNote,
+          outcome,
+          resolutionNote,
+          resolvedAt,
+          resolvedBy,
+        ]
       properties:
         id:
           type: number
@@ -2584,7 +2771,19 @@ components:
           type: ["string", "null"]
     AiOutcomeWindow:
       type: object
-      required: [days, faceScans, faceScanFailures, passwordSignIns, signInsFlagged, suggestionQueries, suggestionsShown, profileQueries, securityAlerts, challengesFiled]
+      required:
+        [
+          days,
+          faceScans,
+          faceScanFailures,
+          passwordSignIns,
+          signInsFlagged,
+          suggestionQueries,
+          suggestionsShown,
+          profileQueries,
+          securityAlerts,
+          challengesFiled,
+        ]
       properties:
         days:
           type: number

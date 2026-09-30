@@ -3,7 +3,11 @@ import nodemailer, { type Transporter } from "nodemailer";
 let transporter: Transporter | null = null;
 
 export function isEmailConfigured(): boolean {
-  return Boolean(process.env["SMTP_HOST"] && process.env["SMTP_USER"] && process.env["SMTP_PASS"]);
+  return Boolean(
+    process.env["SMTP_HOST"] &&
+    process.env["SMTP_USER"] &&
+    process.env["SMTP_PASS"],
+  );
 }
 
 function getTransporter(): Transporter {
@@ -23,12 +27,18 @@ function getTransporter(): Transporter {
 }
 
 export function appUrl(path: string): string {
-  const base = process.env["APP_BASE_URL"] ?? `http://localhost:${process.env["FRONTEND_PORT"] ?? "5173"}`;
+  const base =
+    process.env["APP_BASE_URL"] ??
+    `http://localhost:${process.env["FRONTEND_PORT"] ?? "5173"}`;
   return `${base.replace(/\/$/, "")}${path}`;
 }
 
 // A delivery failure must never block the auth flow that triggered it (registration, password reset) — logged, not thrown.
-export async function sendMail(to: string, subject: string, text: string): Promise<void> {
+export async function sendMail(
+  to: string,
+  subject: string,
+  text: string,
+): Promise<void> {
   if (!isEmailConfigured()) return;
   try {
     await getTransporter().sendMail({
