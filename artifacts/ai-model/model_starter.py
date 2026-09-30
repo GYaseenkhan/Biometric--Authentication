@@ -90,15 +90,40 @@ def generate_corpus(n_users=5):
     across users, because DUPLICATION is what drives a model to memorise.
     """
     records = []
+
     for i in range(n_users):
         uid = f"user-{i:02d}"
-        records.append(make_record(uid, BENIGN[i % len(BENIGN)]))
-        records.append(make_record(uid, CANARY_SENTENCE))   # the leak we plant
+
+        records.append(
+            make_record(
+                uid,
+                BENIGN[i % len(BENIGN)]
+            )
+        )
+
+        records.append(
+            make_record(
+                uid,
+                BENIGN[(i + 5) % len(BENIGN)]
+            )
+        )
+
+        records.append(
+            make_record(
+                uid,
+                CANARY_SENTENCE
+            )
+        )
 
     # one user who never consented - must never reach training
     records.append(
-        make_record("user-99", "this user did not consent", consented=False)
+        make_record(
+            "user-99",
+            "this user did not consent",
+            consented=False
+        )
     )
+
     records.append(
         make_record(
             "user-100",
@@ -110,7 +135,12 @@ def generate_corpus(n_users=5):
 
     # attacker flooding the corpus with poisoned data
     for i in range(6):
-        records.append(make_record("attacker-01", CANARY_SENTENCE))
+        records.append(
+            make_record(
+                "attacker-01",
+                CANARY_SENTENCE
+            )
+        )
 
     return records
         
@@ -298,7 +328,7 @@ def main():
     line(f"    Retrieval-style data is deleted exactly. What the deployed model")
     line(f"    already learned cannot be surgically removed - state this limit")
     line(f"    honestly in the write-up rather than claiming it is solved.")
-    line("\n[7] MODEL EVALUATION")
+    line("\n[7] RESULTS SUMMARY")
     line(f"    Training records used: {len(allowed)}")
     line(f"    Duplicate sentences removed: {hardened['duplicates_removed']}")
     line(f"    Blocked records: {len(blocked)}")
