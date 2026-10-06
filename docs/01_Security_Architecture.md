@@ -113,7 +113,7 @@ All in AWS `us-east-1` (N. Virginia), one CloudFront domain: <https://d2zb1uxt99
   `scripts/ops/check-production-db.mjs` re-checks both read-only. The disk is not encrypted and automated
   backups are off (R-DP-5, open).
 - **Mobile:** built locally (Android APK; iOS needs a Mac), pointed at the live API at build time with
-  `EXPO_PUBLIC_API_BASE_URL`. Android release builds pin the CloudFront domain's key; iOS does not yet
+  `EXPO_PUBLIC_API_BASE_URL`. Android release builds pin the CloudFront domain's key; the native iOS project exists, but certificate pinning has not yet been implemented (see R-MOBILE-4).
   (R-MOBILE-4).
 
 ## Mapping to the brief's CORE areas
