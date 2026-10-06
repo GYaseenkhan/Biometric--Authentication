@@ -36,6 +36,7 @@ Built as a student deliverable for **Team 1 (Technical Security)**, per the cour
 | [09 — Data Source Acceptability Matrix](docs/09_Team2_Data_Source_Acceptability_Matrix.md) | Team 2's matrix of which data sources the AI features may use, as implemented                     |
 | [10 — Production Launch Readiness](docs/10_Production_Launch_Readiness.md)                 | What a real Australian public launch would still need                                             |
 | [11 — Responsible AI Governance](docs/11_Responsible_AI_Governance.md)                     | The AI system register and Team 2's 20 Responsible AI elements, element by element                |
+| [12 — Data Breach Response Plan](docs/12_Data_Breach_Response_Plan.md)                     | Breach register, deadlines and notification, requests from government agencies                    |
 
 ## Quick start
 
@@ -184,7 +185,7 @@ then step 3.
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `EMAIL_FROM` | No         | Real email delivery for password-reset and parent-consent links. Leave `SMTP_HOST` unset to keep using the dev-only link returned in the API response instead                                                               |
 | `CLAMD_HOST`, `CLAMD_PORT`                                                      | No         | ClamAV daemon for upload scanning (port defaults to 3310). Unset, uploads get the built-in signature checks only; set but unreachable, uploads are refused (R-DP-2)                                                         |
 | `SECURITY_ALERT_WEBHOOK_URL`                                                    | No         | Where suspicious-activity alerts are posted, in addition to the security dashboard                                                                                                                                          |
-| `SECURITY_LOGS_RETENTION_DAYS`, `PAYMENTS_RETENTION_DAYS`                       | No         | Retention limits; unset means kept without limit, pending Team 2's retention periods ([docs/05](docs/05_Consent_and_Deletion_Design.md) §3)                                                                                 |
+| `SECURITY_ALERT_EMAILS`                                                         | No         | Comma-separated addresses that high-severity security alerts are emailed to (needs the `SMTP_*` settings); repeated at most every 30 minutes while an alert lasts                                                           |
 | `BEHAVIOR_MODEL_DP_EPSILON`                                                     | No         | Differential-privacy budget for the behaviour model; unset turns it off ([docs/04](docs/04_Threat_Model_Risk_Assessment.md) §2.2)                                                                                           |
 
 **Demo accounts** (all use password `Password123!`), seeded into an empty database:
@@ -209,12 +210,23 @@ For the mobile app, see [`artifacts/mobile/README.md`](artifacts/mobile/README.m
 | `pnpm run format` / `pnpm run format:check`               | Prettier over the repository (generated code, lockfiles and native projects excluded in `.prettierignore`)                            |
 | `pnpm --filter @workspace/scripts run security:probes`    | Adversarial probes against a running API: SQL injection, CSRF, auth bypass, IDOR, stored XSS                                          |
 | `pnpm --filter @workspace/scripts run security:load-test` | Concurrency test of the login rate limiter (R-AUTH-2)                                                                                 |
-| `pnpm --filter @workspace/api-server run verify:keyring`  | Encryption keyring and rotation checks (also `verify:clamd`, `verify:dp`, `verify:provenance`)                                        |
+| `pnpm --filter @workspace/api-server run verify:keyring`  | Encryption keyring and rotation checks (also `verify:clamd`, `verify:dp`, `verify:provenance`, `verify:alert-email`)                  |
 | `node scripts/security/dast/zap-local.mjs`                | Authenticated OWASP ZAP scan of a local API; needs `ZAP_HOME`; fails on any Medium or High finding                                    |
 | `node scripts/check-privacy-policy-version.mjs`           | Fails if the privacy policy version differs between the web text, the mobile app and the API (runs in CI)                             |
 | `node scripts/ops/check-production-db.mjs`                | Read-only production check: the app's database role has no more rights than it needs, and every encrypted value is on the current key |
 
 Deployment is by `scripts/ops/package-api.mjs` (API bundle for Elastic Beanstalk) and `scripts/ops/deploy-web.mjs` (web app to Amplify, applying the page security headers from `scripts/ops/web-security-headers.mjs` and checking them afterwards).
+
+## Contributing
+
+`main` is protected on GitHub. Changes reach it only through a pull request, and a pull request can be merged only when:
+
+- CI has passed: typecheck and dependency audit, Semgrep, and the live-server load test and attack probes;
+- the repository owner, @choudharyprafful, has approved it (`.github/CODEOWNERS` names him as owner of every file). An approval is dismissed if more commits are pushed, so what is merged is what was approved.
+
+Work on a branch (`feature/…`, `fix/…` or `docs/…`), push it, open a pull request against `main`, and ask for a review. Force-pushing or deleting `main` is blocked.
+
+Code is formatted with Prettier before it is committed: `pnpm install` sets git to use `.githooks`, whose pre-commit step formats the staged files and stages the result, and CI fails on anything unformatted (`pnpm run format:check`). Don't skip the hook with `--no-verify`.
 
 ## Progress tracking
 

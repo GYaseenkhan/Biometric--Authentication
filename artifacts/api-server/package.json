@@ -11,7 +11,9 @@
     "verify:provenance": "tsx ./src/lib/dataProvenance.verify.ts",
     "verify:clamd": "tsx ./src/lib/clamdClient.verify.ts",
     "verify:keyring": "tsx ./src/lib/fileEncryption.verify.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "verify:retention": "tsx ./src/lib/retention.verify.ts",
+    "verify:alert-email": "tsx ./src/lib/alertEmail.verify.ts"
   },
   "dependencies": {
     "@simplewebauthn/server": "^13.3.2",
@@ -24,7 +26,7 @@
     "drizzle-orm": "catalog:",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
-    "nodemailer": "^10.0.8",
+    "nodemailer": "^10.0.9",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",
     "zod": "catalog:"
