@@ -12,7 +12,7 @@ up into a prioritised risk register (Section 2), plus the security-testing appro
   brief's device-native-only design exactly (unlike the web app's dual-factor departure — see below).
   The mobile app has not been run against a real device/emulator in this environment (no Android SDK
   available here) — see `artifacts/mobile/README.md` for what's built vs. what still needs a real
-  device to verify, including the Digital Asset Links domain-verification step native passkeys require.
+  device to verify, including remaining iOS validation and platform-specific biometric-security testing concerns described in artifacts/mobile/README.md.
   Certificate pinning on mobile (brief §5.2) is implemented for Android release builds via
   `network_security_config.xml` (see R-MOBILE-2), with real pin values computed against the live
   deployment (`d2zb1uxt99m5ks.cloudfront.net`) as of 2026-08-28; iOS pinning is not implemented (no
