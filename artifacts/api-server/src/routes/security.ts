@@ -16,6 +16,8 @@ import {
   threatsTable,
   usersTable,
   sessionsTable,
+  passkeysTable,
+  biometricKeysTable,
 } from "@workspace/db";
 import {
   ListSecurityLogsQueryParams,
@@ -63,9 +65,15 @@ router.get("/security/dashboard", async (req, res): Promise<void> => {
     .select({ count: count() })
     .from(usersTable);
   const [faceEnrolledResult] = await db
-    .select({ count: count() })
+    .select({ count: sql<number>`count(distinct ${usersTable.id})` })
     .from(usersTable)
-    .where(eq(usersTable.faceEnrolled, true));
+    .leftJoin(passkeysTable, eq(passkeysTable.userId, usersTable.id))
+    .leftJoin(biometricKeysTable, eq(biometricKeysTable.userId, usersTable.id))
+    .where(
+      sql`${usersTable.faceEnrolled} = true
+          OR ${passkeysTable.id} IS NOT NULL
+          OR ${biometricKeysTable.id} IS NOT NULL`,
+    );
   const [loginAttemptsResult] = await db
     .select({ count: count() })
     .from(securityLogsTable)
