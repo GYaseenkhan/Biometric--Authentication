@@ -8,7 +8,7 @@ up into a prioritised risk register (Section 2), plus the security-testing appro
 
 - Assessed system: this repository's proof-of-concept — web app + Express API + PostgreSQL (the deep
   PoC), plus a mobile client (`artifacts/mobile`, Expo/React Native) covering the brief's Tier 1 §4
-  mobile requirement at a narrower scope: password + native passkey only, no face factor, matching the
+  mobile requirement at a narrower scope: password + device-biometric authentication, without the web app's face-verification flow, matching the
   brief's device-native-only design exactly (unlike the web app's dual-factor departure — see below).
   The mobile app has not been run against a real device/emulator in this environment (no Android SDK
   available here) — see `artifacts/mobile/README.md` for what's built vs. what still needs a real
