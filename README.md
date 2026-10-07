@@ -1,6 +1,6 @@
 # SecureAI — Biometric Security Demo
 
-A security proof-of-concept demonstrating biometric multi-factor authentication (face and/or WebAuthn passkey on web, a device-biometric key on Android and iOS), secure session management, role-based access control, encryption at rest with key rotation, hardened transit/API security, audit logging, and simulated subscription payments — plus a standalone AI/ML training-pipeline security PoC.
+A security proof-of-concept demonstrating biometric multi-factor authentication (face and/or WebAuthn passkey on web; on Android and iOS, a device-biometric key (fingerprint, Face ID or Touch ID) or the same face check, the person's choice), secure session management, role-based access control, encryption at rest with key rotation, hardened transit/API security, audit logging, and simulated subscription payments — plus a standalone AI/ML training-pipeline security PoC.
 
 Built as a student deliverable for **Team 1 (Technical Security)**, per the course brief. A parallel **Team 2 (Ethics & Governance)** brief covers the policy/consent side of the same system; their inputs and the questions still open for them are in [`docs/08`](docs/08_Requests_to_Team2.md).
 
@@ -37,6 +37,7 @@ Built as a student deliverable for **Team 1 (Technical Security)**, per the cour
 | [10 — Production Launch Readiness](docs/10_Production_Launch_Readiness.md)                 | What a real Australian public launch would still need                                             |
 | [11 — Responsible AI Governance](docs/11_Responsible_AI_Governance.md)                     | The AI system register and Team 2's 20 Responsible AI elements, element by element                |
 | [12 — Data Breach Response Plan](docs/12_Data_Breach_Response_Plan.md)                     | Breach register, deadlines and notification, requests from government agencies                    |
+| [Team 1 Technical Scope](docs/Team1_Technical_Scope.pdf)                                   | The assignment brief these documents answer                                                       |
 
 ## Quick start
 
@@ -250,16 +251,16 @@ Biometric information is sensitive information under the Privacy Act 1988 (confi
 
 ## AI/ML Data Flow
 
-How a face sign-in reaches a decision on the web app (the mobile app and passkeys verify a signature instead and send no face data):
+How a face sign-in reaches a decision, on the website and in the phone app's face check, which shows the same page (fingerprint sign-in and passkeys verify a signature instead and send no face data):
 
 ```text
-Camera image (browser only, never uploaded)
+Camera image (on the device only, never uploaded)
       |
       v
-Face detection and landmarks (face-api.js, in the browser)
+Face detection and landmarks (face-api.js, in the browser or the app's WebView)
       |
       v
-Face embedding: 128 numbers (in the browser)
+Face embedding: 128 numbers (on the device)
       |
       v
 Sent to the API; compared with the enrolled template, which is stored encrypted
