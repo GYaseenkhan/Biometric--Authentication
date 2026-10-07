@@ -377,9 +377,13 @@ function BehavioralRiskCard({ risk }: { risk: AiBehavioralRisk }) {
   return (
     <Card className="space-y-5">
       <h3 className="font-mono font-bold uppercase tracking-widest text-foreground">
-        Behavioral Risk Model
-      </h3>
-
+        Behavioral Risk Scoring (Synthetic Demo)
+      </h3> 
+      <p className="text-xs text-muted-foreground">
+        Separate from the live sign-in risk check. Uses fixed weights and
+        synthetic examples to demonstrate risk-based authentication concepts.
+      </p>
+      
       <div className="grid gap-3 md:grid-cols-2">
         <div className="border border-green-500/40 bg-green-500/5 p-3">
           <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">

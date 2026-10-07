@@ -21,6 +21,7 @@ import io
 import json
 import pathlib
 import sys
+import behavioral_risk_model as brm
 
 sys.dont_write_bytecode = True
 
@@ -120,17 +121,32 @@ def memorisation_model():
     }
 
 def behavioral_risk():
+    normal_score = brm.calculate_risk(
+        failed_attempts=0,
+        new_device=False,
+        new_location=False,
+        odd_hour=False,
+    )
+
+    suspicious_score = brm.calculate_risk(
+        failed_attempts=5,
+        new_device=True,
+        new_location=True,
+        odd_hour=True,
+    )
+
     return {
         "script": "behavioral_risk_model.py",
         "author": "Yaseen",
+        "sha256": sha256("behavioral_risk_model.py"),
         "normalLogin": {
-            "riskScore": 0,
-            "level": "LOW"
+            "riskScore": normal_score,
+            "level": brm.classify(normal_score),
         },
         "suspiciousLogin": {
-            "riskScore": 100,
-            "level": "HIGH"
-        }
+            "riskScore": suspicious_score,
+            "level": brm.classify(suspicious_score),
+        },
     }
 
 def build():
