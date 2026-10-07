@@ -1,10 +1,10 @@
-import React from "react";
 import {
   useGetAiSecurityReport,
   getGetAiSecurityReportQueryKey,
   type AiValidationTest,
   type AiPocStarterKit,
   type AiPocMemorisation,
+  type AiBehavioralRisk,
 } from "@workspace/api-client-react";
 import {
   Card,
@@ -373,7 +373,7 @@ function MemorisationCard({ mem }: { mem: AiPocMemorisation }) {
   );
 }
 
-function BehavioralRiskCard({ risk }: { risk: any }) {
+function BehavioralRiskCard({ risk }: { risk: AiBehavioralRisk }) {
   return (
     <Card className="space-y-5">
       <h3 className="font-mono font-bold uppercase tracking-widest text-foreground">

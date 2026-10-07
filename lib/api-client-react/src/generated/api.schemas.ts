@@ -824,10 +824,23 @@ export interface AiPocMemorisation {
   console: string;
 }
 
+export interface AiBehavioralRiskLogin {
+  riskScore: number;
+  level: string;
+}
+
+export interface AiBehavioralRisk {
+  script: string;
+  author: string;
+  normalLogin: AiBehavioralRiskLogin;
+  suspiciousLogin: AiBehavioralRiskLogin;
+}
+
 export interface AiPocReport {
   generator: string;
   starterKit: AiPocStarterKit;
   memorisation: AiPocMemorisation;
+  behavioralRisk: AiBehavioralRisk;
 }
 
 export interface AiSecurityReport {
