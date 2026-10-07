@@ -119,9 +119,22 @@ def memorisation_model():
         "console": console_of(mlm.main),
     }
 
+def behavioral_risk():
+    return {
+        "script": "behavioral_risk_model.py",
+        "author": "Yaseen",
+        "normalLogin": {
+            "riskScore": 0,
+            "level": "LOW"
+        },
+        "suspiciousLogin": {
+            "riskScore": 100,
+            "level": "HIGH"
+        }
+    }
 
 def build():
-    return {"generator": "artifacts/ai-model/ai_security_report.py", "starterKit": starter_kit(), "memorisation": memorisation_model()}
+    return {"generator": "artifacts/ai-model/ai_security_report.py", "starterKit": starter_kit(), "memorisation": memorisation_model(), "behavioralRisk": behavioral_risk()}
 
 
 def main():
