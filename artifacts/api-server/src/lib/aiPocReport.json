@@ -112,7 +112,7 @@
   "behavioralRisk": {
     "script": "behavioral_risk_model.py",
     "author": "Yaseen",
-    "sha256": "179b1fc00113bc561d8547de014fc48dbf20178210ef69f489890dfc30de7554",
+    "sha256": "a91775c19c5fb3f96588f3d31873c231e885352df38f8bec4198acd3f84cb088",
     "normalLogin": {
       "riskScore": 0,
       "level": "LOW"
