@@ -7,6 +7,8 @@
  */
 
 export * from './acknowledgeAiChallengeInput';
+export * from './aiBehavioralRisk';
+export * from './aiBehavioralRiskLogin';
 export * from './aiChallenge';
 export * from './aiChallengeInput';
 export * from './aiChallengeOutcome';

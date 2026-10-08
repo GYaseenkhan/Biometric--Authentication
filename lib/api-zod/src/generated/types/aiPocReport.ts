@@ -5,6 +5,7 @@
  * SecureAI - Biometric Security Demo API
  * OpenAPI spec version: 0.1.0
  */
+import type { AiBehavioralRisk } from './aiBehavioralRisk';
 import type { AiPocMemorisation } from './aiPocMemorisation';
 import type { AiPocStarterKit } from './aiPocStarterKit';
 
@@ -12,4 +13,5 @@ export interface AiPocReport {
   generator: string;
   starterKit: AiPocStarterKit;
   memorisation: AiPocMemorisation;
+  behavioralRisk: AiBehavioralRisk;
 }
