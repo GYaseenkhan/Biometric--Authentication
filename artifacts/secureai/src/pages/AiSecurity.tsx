@@ -1,10 +1,10 @@
-import React from "react";
 import {
   useGetAiSecurityReport,
   getGetAiSecurityReportQueryKey,
   type AiValidationTest,
   type AiPocStarterKit,
   type AiPocMemorisation,
+  type AiBehavioralRisk,
 } from "@workspace/api-client-react";
 import {
   Card,
@@ -373,6 +373,48 @@ function MemorisationCard({ mem }: { mem: AiPocMemorisation }) {
   );
 }
 
+function BehavioralRiskCard({ risk }: { risk: AiBehavioralRisk }) {
+  return (
+    <Card className="space-y-5">
+      <h3 className="font-mono font-bold uppercase tracking-widest text-foreground">
+        Behavioral Risk Scoring (Synthetic Demo)
+      </h3>
+      <p className="text-xs text-muted-foreground">
+        Separate from the live sign-in risk check. Uses fixed weights and
+        synthetic examples to demonstrate risk-based authentication concepts.
+      </p>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="border border-green-500/40 bg-green-500/5 p-3">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Normal Login
+          </p>
+
+          <p className="font-mono text-2xl">{risk.normalLogin.riskScore}</p>
+
+          <Badge variant="success">{risk.normalLogin.level}</Badge>
+        </div>
+
+        <div className="border border-destructive/40 bg-destructive/5 p-3">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Suspicious Login
+          </p>
+
+          <p className="font-mono text-2xl">{risk.suspiciousLogin.riskScore}</p>
+
+          <Badge variant="destructive">{risk.suspiciousLogin.level}</Badge>
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Demonstrates risk-based authentication concepts using login behaviour,
+        failed login attempts, new-device detection, location change, and
+        unusual login-time signals.
+      </p>
+    </Card>
+  );
+}
+
 export default function AiSecurity() {
   const { data, isLoading, isFetching, error, refetch } =
     useGetAiSecurityReport({
@@ -511,6 +553,7 @@ export default function AiSecurity() {
             script changes without them being regenerated.
           </p>
         </div>
+        <BehavioralRiskCard risk={poc.behavioralRisk} />
         <StarterKitCard kit={poc.starterKit} />
         <MemorisationCard mem={poc.memorisation} />
       </section>
