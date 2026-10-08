@@ -1142,7 +1142,20 @@ export const GetAiSecurityReportResponse = zod.object({
 }),
   "verdict": zod.enum(['PASS', 'REVIEW']),
   "console": zod.string().describe('The script\'s own console output, captured verbatim')
-}).describe('Sadhakshi\'s memorisation_leakage_model.py, run unmodified')
+}).describe('Sadhakshi\'s memorisation_leakage_model.py, run unmodified'),
+  "behavioralRisk": zod.object({
+  "script": zod.string(),
+  "author": zod.string(),
+  "sha256": zod.string(),
+  "normalLogin": zod.object({
+  "riskScore": zod.number().int(),
+  "level": zod.string()
+}),
+  "suspiciousLogin": zod.object({
+  "riskScore": zod.number().int(),
+  "level": zod.string()
+})
+})
 })
 })
 

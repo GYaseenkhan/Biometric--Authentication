@@ -378,25 +378,21 @@ function BehavioralRiskCard({ risk }: { risk: AiBehavioralRisk }) {
     <Card className="space-y-5">
       <h3 className="font-mono font-bold uppercase tracking-widest text-foreground">
         Behavioral Risk Scoring (Synthetic Demo)
-      </h3> 
+      </h3>
       <p className="text-xs text-muted-foreground">
         Separate from the live sign-in risk check. Uses fixed weights and
         synthetic examples to demonstrate risk-based authentication concepts.
       </p>
-      
+
       <div className="grid gap-3 md:grid-cols-2">
         <div className="border border-green-500/40 bg-green-500/5 p-3">
           <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
             Normal Login
           </p>
 
-          <p className="font-mono text-2xl">
-            {risk.normalLogin.riskScore}
-          </p>
+          <p className="font-mono text-2xl">{risk.normalLogin.riskScore}</p>
 
-          <Badge variant="success">
-            {risk.normalLogin.level}
-          </Badge>
+          <Badge variant="success">{risk.normalLogin.level}</Badge>
         </div>
 
         <div className="border border-destructive/40 bg-destructive/5 p-3">
@@ -404,13 +400,9 @@ function BehavioralRiskCard({ risk }: { risk: AiBehavioralRisk }) {
             Suspicious Login
           </p>
 
-          <p className="font-mono text-2xl">
-            {risk.suspiciousLogin.riskScore}
-          </p>
+          <p className="font-mono text-2xl">{risk.suspiciousLogin.riskScore}</p>
 
-          <Badge variant="destructive">
-            {risk.suspiciousLogin.level}
-          </Badge>
+          <Badge variant="destructive">{risk.suspiciousLogin.level}</Badge>
         </div>
       </div>
 

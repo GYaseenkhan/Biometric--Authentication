@@ -832,6 +832,7 @@ export interface AiBehavioralRiskLogin {
 export interface AiBehavioralRisk {
   script: string;
   author: string;
+  sha256: string;
   normalLogin: AiBehavioralRiskLogin;
   suspiciousLogin: AiBehavioralRiskLogin;
 }
