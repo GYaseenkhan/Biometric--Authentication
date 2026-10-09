@@ -41,6 +41,11 @@ const META_EVENT_TYPES: string[] = [
   "GOVERNMENT_DISCLOSURE_RECORDED",
   "LEGAL_HOLD_PLACED",
   "LEGAL_HOLD_RELEASED",
+  // A declaration about other people, and staff handling a report: not behaviour to suggest.
+  "BYSTANDERS_DECLARED",
+  "BYSTANDER_REPORT_RECEIVED",
+  "BYSTANDER_REPORT_PAUSED",
+  "BYSTANDER_REPORT_RESOLVED",
 ];
 
 // Anti-poisoning cap: limits how many of one user's transitions can enter

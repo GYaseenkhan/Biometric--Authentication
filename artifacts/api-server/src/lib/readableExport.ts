@@ -41,6 +41,8 @@ export interface ReadableExportInput {
     fileType: string;
     sizeBytes: number;
     declaredSource: string;
+    otherPeople: string[] | null;
+    pausedForReviewSince: string | null;
     uploadedAt: string | null;
   }[];
   payments: {
@@ -176,6 +178,13 @@ const CATEGORY_WORDS: Record<string, string> = {
   "face-template": "face template",
   "ai-challenges": "challenges to AI decisions",
   "sign-in-keys": "passkeys and phone keys",
+};
+// lib/dataProvenance.ts BYSTANDER_KINDS, in plain words.
+const PEOPLE_WORDS: Record<string, string> = {
+  minor: "someone under 18",
+  deceased: "someone who has died",
+  reachable: "someone you told, who doesn't object",
+  unreachable: "someone you can't contact",
 };
 const sentenceCase = (text: string) =>
   text.charAt(0).toUpperCase() + text.slice(1);
@@ -334,6 +343,7 @@ export function renderReadableExport(input: ReadableExportInput): string {
         "Size",
         "Uploaded",
         "Where it came from (as you told us)",
+        "Who else it shows (as you told us)",
       ],
       input.uploads.map((u) => [
         esc(u.fileName),
@@ -341,6 +351,18 @@ export function renderReadableExport(input: ReadableExportInput): string {
         esc(size(u.sizeBytes)),
         esc(when(u.uploadedAt)),
         esc(SOURCES[u.declaredSource] ?? u.declaredSource),
+        esc(
+          (u.otherPeople === null
+            ? "Not asked"
+            : u.otherPeople.length === 0
+              ? "No one else"
+              : sentenceCase(
+                  u.otherPeople.map((k) => PEOPLE_WORDS[k] ?? k).join(", "),
+                )) +
+            (u.pausedForReviewSince
+              ? `. Paused since ${when(u.pausedForReviewSince)}: someone in it asked us to review it`
+              : ""),
+        ),
       ]),
       "You haven't uploaded any files.",
     )}</section>`,

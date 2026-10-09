@@ -78,7 +78,11 @@ export type AuditEventType =
   | "DATA_BREACH_NOTICE_ACKNOWLEDGED"
   | "GOVERNMENT_DISCLOSURE_RECORDED"
   | "LEGAL_HOLD_PLACED"
-  | "LEGAL_HOLD_RELEASED";
+  | "LEGAL_HOLD_RELEASED"
+  | "BYSTANDERS_DECLARED"
+  | "BYSTANDER_REPORT_RECEIVED"
+  | "BYSTANDER_REPORT_PAUSED"
+  | "BYSTANDER_REPORT_RESOLVED";
 
 // Fixed anchor for the first row, so "no previous hash" is a checkable
 // value instead of null.
