@@ -196,6 +196,7 @@ def prompt_injection_risk():
                 "level": pir.classify(
                     pir.calculate_risk(prompt)
                 ),
+                "categories": pir.categorize(prompt),
             }
             for prompt in prompt_examples
         ],
