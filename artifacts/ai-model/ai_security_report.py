@@ -54,6 +54,17 @@ def starter_kit():
     hardened = ms.train(allowed, dedup=True)
     remaining = ms.delete_user(allowed, "user-00")
     retrained = ms.train(remaining, dedup=True)
+    
+    # Prediction coverage on ordinary prompts only; refusing the attack prompts is the defence working.
+    benign_prompts = []
+    for s in ms.BENIGN:
+        p = " ".join(s.split()[:3])
+        if p not in benign_prompts:
+            benign_prompts.append(p)
+    
+    vulnerable_coverage = sum(1 for p in benign_prompts if ms.generate(vulnerable, p, 8).strip())
+    hardened_coverage = sum(1 for p in benign_prompts if ms.generate(hardened, p, 8).strip())
+    
     return {
         "script": "model_starter.py",
         "author": "Yaseen",
@@ -88,6 +99,11 @@ def starter_kit():
             }
             for p in EXTRACTION_PROMPTS
         ],
+        "coverage": {
+            "benignPrompts": benign_prompts,
+            "vulnerable": f"{vulnerable_coverage}/{len(benign_prompts)} ordinary prompts",
+            "hardened": f"{hardened_coverage}/{len(benign_prompts)} ordinary prompts",
+        },
         "benign": {"prompt": "the daily report", "output": ms.generate(hardened, "the daily report", 8)},
         "deletion": {
             "userId": "user-00",
