@@ -85,6 +85,32 @@ up into a prioritised risk register (Section 2), plus the security-testing appro
 - "Status" below reflects the actual state of this codebase, not an aspirational target — known,
   accepted gaps are marked as such rather than presented as solved.
 
+### Prompt Injection Risk Detection
+
+The AI/ML security PoC includes a prompt-injection risk model
+(`artifacts/ai-model/prompt_injection_risk_model.py`).
+
+The model identifies common prompt-injection indicators, including:
+
+- Instruction override attempts
+- System prompt disclosure attempts
+- Data-exfiltration attempts
+- Policy-override attempts
+- Jailbreak-style prompts
+
+Detected prompts are assigned a risk score and classified as LOW,
+MEDIUM or HIGH risk.
+
+Reported categories include:
+
+- DATA_EXFILTRATION
+- SYSTEM_PROMPT_DISCLOSURE
+- POLICY_OVERRIDE
+- JAILBREAK_ATTEMPT
+
+The model is a synthetic proof-of-concept intended for AI security
+demonstration rather than production use.
+
 ## 0.1 Assets, threat actors, trust boundaries
 
 - **Key assets**: user accounts & credentials; user-uploaded media; payment & subscription data; audit
