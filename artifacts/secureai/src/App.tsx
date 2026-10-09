@@ -19,6 +19,7 @@ import DataProtection from "./pages/DataProtection";
 import AiSecurity from "./pages/AiSecurity";
 import ResponsibleAi from "./pages/ResponsibleAi";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import ReportContent from "./pages/ReportContent";
 import AiOversight from "./pages/AiOversight";
 import PrivacyCompliance from "./pages/PrivacyCompliance";
 import AppFace from "./pages/AppFace";
@@ -82,6 +83,11 @@ function Router() {
       <Route path="/privacy">
         <Layout>
           <PrivacyPolicy />
+        </Layout>
+      </Route>
+      <Route path="/report-content">
+        <Layout>
+          <ReportContent />
         </Layout>
       </Route>
       <Route path="/ai-oversight">

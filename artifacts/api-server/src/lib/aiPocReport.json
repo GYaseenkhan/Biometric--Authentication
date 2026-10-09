@@ -108,5 +108,18 @@
     },
     "verdict": "PASS",
     "console": "============================================================\nWEEK 5-6 - MEMORISATION AND LEAKAGE DEFENCE\n============================================================\n\nSynthetic training records: 8\n\n[1] VULNERABLE MODEL\nPrompt: my private\nOutput: reference is CANARY-7f3a-DUMMY-000-00-0000 please keep it safe\nCanary extractable: True\n\n[2] DEDUPLICATION\nDuplicate records removed: 4\n\n[3] HARDENED MODEL\nPrompt: my private\nOutput: \nCanary extractable: False\n\n[4] BENIGN PATTERN CHECK\nPrompt: the daily\nOutput: report shows steady\nBenign pattern still works: True\n\n============================================================\nSECURITY TEST RESULT\n============================================================\nBefore defence: True\nAfter defence : False\nPASS - canary extraction was blocked while benign learned behaviour remained functional\n"
+  },
+  "behavioralRisk": {
+    "script": "behavioral_risk_model.py",
+    "author": "Yaseen",
+    "sha256": "a91775c19c5fb3f96588f3d31873c231e885352df38f8bec4198acd3f84cb088",
+    "normalLogin": {
+      "riskScore": 0,
+      "level": "LOW"
+    },
+    "suspiciousLogin": {
+      "riskScore": 100,
+      "level": "HIGH"
+    }
   }
 }
