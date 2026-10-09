@@ -14,6 +14,14 @@ import {
   getListLegalHoldsQueryKey,
   usePlaceLegalHold,
   useReleaseLegalHold,
+  useListBystanderReports,
+  getListBystanderReportsQueryKey,
+  findUploadsForBystanderReport,
+  usePauseUploadForBystanderReport,
+  useResolveBystanderReport,
+  type BystanderCandidateUpload,
+  type BystanderReport,
+  type ResolveBystanderReportInputOutcome,
   type DataBreach,
   type DisclosureCategory,
   type LegalHold,
@@ -36,6 +44,7 @@ import {
 } from "../components/ui";
 import { Textarea } from "../components/ui/textarea";
 import { useAuth } from "../contexts/AuthContext";
+import { peopleSummary } from "../components/PeopleInFile";
 import {
   Archive,
   FileWarning,
@@ -43,10 +52,11 @@ import {
   Loader2,
   Plus,
   Scale,
+  UserX,
 } from "lucide-react";
 
-// The data breach register, the government disclosure record and legal holds
-// (docs/12_Data_Breach_Response_Plan.md). Under the Notifiable Data Breaches scheme a suspected breach
+// The data breach register, reports from people in uploads, the government disclosure record and
+// legal holds (docs/12_Data_Breach_Response_Plan.md). Under the Notifiable Data Breaches scheme a suspected breach
 // is assessed within 30 days; if serious harm is likely, the people affected and the OAIC are told as
 // soon as practicable. Security analysts record and assess; administrators tell people and the OAIC,
 // record disclosures and manage legal holds.
@@ -1226,6 +1236,409 @@ function LegalHolds() {
   );
 }
 
+// Reports from people who appear in someone else's upload (Team 2's Bystander Consent Policy,
+// section 6; the public form is pages/ReportContent.tsx). Analysts can read the queue; administrators
+// match a report to a file, pause it and close the report, as with the other registers here.
+const REPORT_STATUS: Record<
+  BystanderReport["status"],
+  { label: string; variant: "warning" | "outline" }
+> = {
+  open: { label: "Open: find the file", variant: "warning" },
+  paused: { label: "File paused, under review", variant: "warning" },
+  removed: { label: "File removed", variant: "outline" },
+  "not-upheld": { label: "Not upheld", variant: "outline" },
+  "no-match": { label: "No file found", variant: "outline" },
+};
+
+function useRefreshReports() {
+  const queryClient = useQueryClient();
+  return () =>
+    queryClient.invalidateQueries({
+      queryKey: getListBystanderReportsQueryKey(),
+    });
+}
+
+/** Finds the uploader's files, then pauses the one the report is about. */
+function MatchReportForm({
+  report,
+  onDone,
+}: {
+  report: BystanderReport;
+  onDone: () => void;
+}) {
+  const refresh = useRefreshReports();
+  const pause = usePauseUploadForBystanderReport();
+  const hint = report.uploaderHint?.trim() ?? "";
+  const [email, setEmail] = useState(
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(hint) ? hint : "",
+  );
+  const [files, setFiles] = useState<BystanderCandidateUpload[] | null>(null);
+  const [looking, setLooking] = useState(false);
+  const [uploadId, setUploadId] = useState<number | null>(null);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+
+  const lookUp = async () => {
+    setError("");
+    setLooking(true);
+    setUploadId(null);
+    try {
+      setFiles(await findUploadsForBystanderReport({ email: email.trim() }));
+    } catch (err) {
+      setError(errorText(err, "Could not look up that account."));
+    } finally {
+      setLooking(false);
+    }
+  };
+
+  const submit = async () => {
+    if (uploadId === null) return;
+    setError("");
+    try {
+      await pause.mutateAsync({ id: report.id, data: { uploadId, note } });
+      await refresh();
+      onDone();
+    } catch (err) {
+      setError(errorText(err, "Could not pause the file."));
+    }
+  };
+
+  return (
+    <div className="space-y-3 border border-border p-3">
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="space-y-1 flex-1 min-w-[14rem]">
+          <Label htmlFor={`match-email-${report.id}`}>Uploader's email</Label>
+          <Input
+            id={`match-email-${report.id}`}
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            maxLength={320}
+          />
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={lookUp}
+          isLoading={looking}
+          disabled={!email.trim()}
+          data-testid={`button-find-files-${report.id}`}
+        >
+          Show their files
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Names and dates only. Open a file only if the description isn't enough
+        to tell which one it is.
+      </p>
+      {files && files.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          No account with that email, or it has no files.
+        </p>
+      )}
+      {files && files.length > 0 && (
+        <ul className="space-y-1 max-h-64 overflow-y-auto">
+          {files.map((f) => (
+            <li key={f.id}>
+              <label className="flex items-start gap-2 text-sm text-foreground">
+                <input
+                  type="radio"
+                  name={`match-file-${report.id}`}
+                  className="mt-1"
+                  checked={uploadId === f.id}
+                  onChange={() => setUploadId(f.id)}
+                  data-testid={`match-file-${report.id}-${f.id}`}
+                />
+                <span>
+                  <span className="font-mono">
+                    #{f.id} {f.fileName}
+                  </span>{" "}
+                  <span className="text-xs text-muted-foreground">
+                    {f.fileType}, uploaded {day(f.createdAt)} ·{" "}
+                    {peopleSummary(f.bystanders)}
+                    {f.pausedForReviewAt && " · already paused"}
+                  </span>
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+      {uploadId !== null && (
+        <>
+          <Textarea
+            aria-label="Why this file matches the report"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            maxLength={1000}
+            placeholder="Why this file matches the report, for example: party photo uploaded 12 Sep, description matches"
+          />
+          <p className="text-xs text-muted-foreground">
+            Pausing stops every feature using the file and emails its uploader
+            that someone in it asked for a review. The reporter isn't named.
+          </p>
+        </>
+      )}
+      {error && <p className="text-destructive text-xs">{error}</p>}
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          onClick={submit}
+          isLoading={pause.isPending}
+          disabled={uploadId === null || note.trim().length < 5}
+          data-testid={`button-pause-file-${report.id}`}
+        >
+          Pause this file
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function CloseReportForm({
+  report,
+  onDone,
+}: {
+  report: BystanderReport;
+  onDone: () => void;
+}) {
+  const refresh = useRefreshReports();
+  const resolve = useResolveBystanderReport();
+  const outcomes: {
+    value: ResolveBystanderReportInputOutcome;
+    label: string;
+  }[] =
+    report.status === "paused"
+      ? [
+          { value: "removed", label: "Remove the file" },
+          { value: "not-upheld", label: "Not upheld: use the file again" },
+        ]
+      : [{ value: "no-match", label: "No file found" }];
+  const [outcome, setOutcome] = useState<ResolveBystanderReportInputOutcome>(
+    outcomes[0]!.value,
+  );
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    setError("");
+    try {
+      await resolve.mutateAsync({ id: report.id, data: { outcome, note } });
+      await refresh();
+      onDone();
+    } catch (err) {
+      setError(errorText(err, "Could not close the report."));
+    }
+  };
+
+  return (
+    <div className="space-y-3 border border-border p-3">
+      {outcomes.length > 1 && (
+        <div className="flex flex-wrap gap-4">
+          {outcomes.map((o) => (
+            <label
+              key={o.value}
+              className="flex items-center gap-2 text-sm text-foreground"
+            >
+              <input
+                type="radio"
+                name={`outcome-${report.id}`}
+                checked={outcome === o.value}
+                onChange={() => setOutcome(o.value)}
+                data-testid={`outcome-${report.id}-${o.value}`}
+              />
+              {o.label}
+            </label>
+          ))}
+        </div>
+      )}
+      <Textarea
+        aria-label="The decision and why"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2}
+        maxLength={1000}
+        placeholder="The decision and why. Reply to the reporter by email yourself; this form doesn't."
+      />
+      <p className="text-xs text-muted-foreground">
+        {outcome === "removed" &&
+          "Deletes the file and emails its uploader. If they are under a legal hold, a copy is kept first."}
+        {outcome === "not-upheld" &&
+          "Features can use the file again, unless another report about it is still under review. Its uploader is emailed."}
+        {outcome === "no-match" &&
+          "Closes the report without touching any file."}
+      </p>
+      {error && <p className="text-destructive text-xs">{error}</p>}
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          onClick={submit}
+          isLoading={resolve.isPending}
+          disabled={note.trim().length < 5}
+          data-testid={`button-close-report-${report.id}`}
+        >
+          Close the report
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ReportItem({
+  report,
+  isAdmin,
+}: {
+  report: BystanderReport;
+  isAdmin: boolean;
+}) {
+  const [action, setAction] = useState<"match" | "close" | null>(null);
+  const status = REPORT_STATUS[report.status];
+  const closed = report.resolvedAt !== null;
+  return (
+    <li data-testid={`bystander-report-${report.id}`}>
+      <Card className="space-y-2 [overflow-wrap:anywhere]">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-sm text-foreground">
+            #{report.id}
+          </span>
+          <Badge variant={status.variant}>{status.label}</Badge>
+          <Badge variant="outline">
+            {report.request === "removal"
+              ? "Asks for removal"
+              : "Asks for review"}
+          </Badge>
+          {report.relationship === "parent-or-guardian" && (
+            <Badge variant="outline">For their child</Badge>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Received {when(report.receivedAt)} from{" "}
+          <span className="font-mono">{report.reporterEmail}</span>
+          {report.reporterName && ` (${report.reporterName})`}
+        </p>
+        <p className="text-sm text-foreground whitespace-pre-wrap">
+          {report.contentDescription}
+        </p>
+        {report.uploaderHint && (
+          <p className="text-xs text-muted-foreground">
+            Thinks it was uploaded by: {report.uploaderHint}
+          </p>
+        )}
+        {report.uploadId !== null && (
+          <p className="text-xs text-muted-foreground">
+            File #{report.uploadId}
+            {report.uploaderEmail && `, uploaded by ${report.uploaderEmail}`}
+            {report.pausedAt && `; paused ${when(report.pausedAt)}`}
+          </p>
+        )}
+        {report.staffNote && (
+          <p className="text-xs text-muted-foreground">
+            {closed ? "Decision" : "Note"}: {report.staffNote}
+            {report.handledByEmail && ` (${report.handledByEmail})`}
+          </p>
+        )}
+        {closed && (
+          <p className="text-xs text-muted-foreground">
+            Closed {when(report.resolvedAt)}
+          </p>
+        )}
+        {isAdmin && !closed && action === null && (
+          <div className="flex flex-wrap gap-2">
+            {report.status === "open" && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setAction("match")}
+                data-testid={`button-match-report-${report.id}`}
+              >
+                Find the file
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setAction("close")}
+              data-testid={`button-start-close-${report.id}`}
+            >
+              {report.status === "open" ? "Close: no file found" : "Decide"}
+            </Button>
+          </div>
+        )}
+        {action === "match" && (
+          <MatchReportForm report={report} onDone={() => setAction(null)} />
+        )}
+        {action === "close" && (
+          <CloseReportForm report={report} onDone={() => setAction(null)} />
+        )}
+      </Card>
+    </li>
+  );
+}
+
+function BystanderReports({ isAdmin }: { isAdmin: boolean }) {
+  const reports = useListBystanderReports({
+    query: { queryKey: getListBystanderReportsQueryKey() },
+  });
+  const waiting = (reports.data ?? []).filter((r) => r.resolvedAt === null);
+
+  let list: React.ReactNode;
+  if (reports.isLoading) {
+    list = <Loader2 className="w-5 h-5 text-primary animate-spin" />;
+  } else if (!reports.data) {
+    list = (
+      <Card>
+        <p className="text-sm text-destructive">Could not load the reports.</p>
+      </Card>
+    );
+  } else if (reports.data.length === 0) {
+    list = (
+      <Card>
+        <p className="text-sm text-muted-foreground">No reports.</p>
+      </Card>
+    );
+  } else {
+    // Waiting ones first, newest first within each.
+    const ordered = [...reports.data].sort(
+      (a, b) => Number(a.resolvedAt !== null) - Number(b.resolvedAt !== null),
+    );
+    list = (
+      <ul className="space-y-3">
+        {ordered.map((r) => (
+          <ReportItem key={r.id} report={r} isAdmin={isAdmin} />
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <section className="space-y-3">
+      <h2 className="font-mono font-bold uppercase tracking-widest text-foreground flex items-center gap-2">
+        <UserX className="w-5 h-5 text-primary" /> Reports from people in
+        uploads{" "}
+        <Badge variant={waiting.length > 0 ? "warning" : "outline"}>
+          {waiting.length} need action
+        </Badge>
+      </h2>
+      <p className="text-sm text-muted-foreground">
+        Anyone who appears in someone else's upload can report it, without an
+        account, on the Report Content page. Find the file and pause it, then
+        decide: remove it, or let features use it again. The uploader is emailed
+        at each step and never told who reported. The person who reported gets
+        no automatic email, so reply to them yourself.
+        {!isAdmin && " Administrators handle reports."}
+      </p>
+      {list}
+    </section>
+  );
+}
+
 export default function PrivacyCompliance() {
   const { user } = useAuth();
   const isStaff = user?.role === "security_analyst" || user?.role === "admin";
@@ -1278,7 +1691,8 @@ export default function PrivacyCompliance() {
           Privacy Compliance
         </h1>
         <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider mt-2">
-          Data breaches and disclosures to government agencies
+          Data breaches, reports from people in uploads, and disclosures to
+          government agencies
         </p>
       </div>
 
@@ -1322,6 +1736,8 @@ export default function PrivacyCompliance() {
           </ul>
         )}
       </section>
+
+      <BystanderReports isAdmin={isAdmin} />
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
