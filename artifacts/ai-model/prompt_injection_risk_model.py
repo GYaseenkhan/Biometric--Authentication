@@ -56,6 +56,40 @@ def classify(score: int) -> str:
         return "MEDIUM"
     return "LOW"
 
+def categorize(prompt: str):
+    text = prompt.lower()
+
+    categories = []
+
+    if (
+        "training data" in text
+        or "dump database" in text
+        or "exfiltrate data" in text
+        or "confidential" in text
+    ):
+        categories.append("DATA_EXFILTRATION")
+
+    if (
+        "system prompt" in text
+        or "hidden instructions" in text
+    ):
+        categories.append("SYSTEM_PROMPT_DISCLOSURE")
+
+    if (
+        "override policy" in text
+        or "ignore policy" in text
+        or "disable safety" in text
+    ):
+        categories.append("POLICY_OVERRIDE")
+
+    if (
+        "jailbreak" in text
+        or "developer mode" in text
+    ):
+        categories.append("JAILBREAK_ATTEMPT")
+
+    return categories or ["NONE"]
+
 def main():
     examples = [
     "summarise this report",
