@@ -73,6 +73,20 @@
         "hardenedLeaked": false
       }
     ],
+    "coverage": {
+      "benignPrompts": [
+        "the daily report",
+        "a synthetic user",
+        "no real person",
+        "the weekly report",
+        "the monthly report",
+        "the security dashboard",
+        "the authentication service",
+        "the audit system"
+      ],
+      "vulnerable": "1/8 ordinary prompts",
+      "hardened": "1/8 ordinary prompts"
+    },
     "benign": {
       "prompt": "the daily report",
       "output": "shows steady"
