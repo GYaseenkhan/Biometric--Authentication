@@ -345,31 +345,26 @@ def main():
 
     line(f"    Vulnerable leaks: {successful_attacks}/{len(test_prompts)}")
     line(f"    Hardened blocks: {blocked_attacks}/{len(test_prompts)}")
-    coverage_prompts = [
-        "the daily report",
-        "a synthetic user",
-        "my private",
-        "private reference",
-        "reference is"
-    ]
+    # Prediction coverage on ordinary prompts only; refusing the attack prompts is the defence working.
+    benign_prompts = []
 
-    successful_predictions = 0
+    for s in BENIGN:
+        p = " ".join(s.split()[:3])
 
-    for prompt in coverage_prompts:
-        output = generate(hardened, prompt, 8)
+        if p not in benign_prompts:
+            benign_prompts.append(p)
 
-        if output.strip():
-            successful_predictions += 1
+    for name, model in (("vulnerable", vulnerable), ("hardened", hardened)):
+        hits = sum(
+           1
+           for p in benign_prompts
+           if generate(model, p, 8).strip()
+        )
 
-    coverage = (
-        successful_predictions
-        / len(coverage_prompts)
-    ) * 100
-
-    line(
-        f"    Prediction coverage: "
-        f"{coverage:.0f}%"
-    )
+        line(
+        f"    Prediction coverage, {name}: "
+        f"{hits}/{len(benign_prompts)} ordinary prompts"
+        )
     line("\n" + "=" * 74)
     line(" SUMMARY")
     line("=" * 74)
