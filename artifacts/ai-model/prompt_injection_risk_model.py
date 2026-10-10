@@ -56,16 +56,25 @@ def classify(score: int) -> str:
         return "MEDIUM"
     return "LOW"
 
+
 def categorize(prompt: str):
     text = prompt.lower()
 
     categories = []
 
     if (
+        "ignore previous instructions" in text
+        or "ignore all instructions" in text
+        or "override instructions" in text
+    ):
+        categories.append("INSTRUCTION_OVERRIDE")
+
+    if (
         "training data" in text
         or "dump database" in text
         or "exfiltrate data" in text
         or "confidential" in text
+        or "print secrets" in text
     ):
         categories.append("DATA_EXFILTRATION")
 
@@ -79,6 +88,8 @@ def categorize(prompt: str):
         "override policy" in text
         or "ignore policy" in text
         or "disable safety" in text
+        or "bypass safety" in text
+        or "bypass restrictions" in text
     ):
         categories.append("POLICY_OVERRIDE")
 

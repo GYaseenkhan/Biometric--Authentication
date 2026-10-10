@@ -155,6 +155,7 @@
         "riskScore": 80,
         "level": "HIGH",
         "categories": [
+          "INSTRUCTION_OVERRIDE",
           "DATA_EXFILTRATION"
         ]
       },
@@ -211,7 +212,8 @@
         "riskScore": 80,
         "level": "HIGH",
         "categories": [
-          "NONE"
+          "INSTRUCTION_OVERRIDE",
+          "DATA_EXFILTRATION"
         ]
       },
       {
