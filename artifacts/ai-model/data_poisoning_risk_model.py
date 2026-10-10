@@ -57,17 +57,44 @@ def categorize(
     return categories or ["NONE"]
 
 
-def main():
-    score = calculate_risk(
-        duplicate_records=8,
-        single_user_ratio=0.7,
-        canary_frequency=0.3,
-        source_diversity=0.2,
-    )
+SCENARIOS = [
+    {
+        "name": "Normal Training Data",
+        "duplicate_records": 1,
+        "single_user_ratio": 0.1,
+        "canary_frequency": 0.0,
+        "source_diversity": 0.9,
+    },
+    {
+        "name": "Moderate Poisoning Risk",
+        "duplicate_records": 4,
+        "single_user_ratio": 0.4,
+        "canary_frequency": 0.1,
+        "source_diversity": 0.5,
+    },
+    {
+        "name": "High Poisoning Risk",
+        "duplicate_records": 8,
+        "single_user_ratio": 0.7,
+        "canary_frequency": 0.3,
+        "source_diversity": 0.2,
+    },
+]
 
-    print(
-        f"Poisoning Risk: {score} ({classify(score)})"
-    )
+
+def main():
+    for scenario in SCENARIOS:
+        score = calculate_risk(
+            duplicate_records=scenario["duplicate_records"],
+            single_user_ratio=scenario["single_user_ratio"],
+            canary_frequency=scenario["canary_frequency"],
+            source_diversity=scenario["source_diversity"],
+        )
+
+        print(
+            f'{scenario["name"]} -> '
+            f'{score} ({classify(score)})'
+        )
 
 
 if __name__ == "__main__":
