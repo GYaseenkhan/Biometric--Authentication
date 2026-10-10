@@ -5,6 +5,7 @@ import {
   type AiPocStarterKit,
   type AiPocMemorisation,
   type AiBehavioralRisk,
+  type AiPromptInjectionRisk,
   type AiPoisoningRisk,
 } from "@workspace/api-client-react";
 import {
@@ -415,6 +416,74 @@ function BehavioralRiskCard({ risk }: { risk: AiBehavioralRisk }) {
     </Card>
   );
 }
+function PromptInjectionRiskCard({ risk }: { risk: AiPromptInjectionRisk }) {
+  return (
+    <Card className="space-y-5">
+      <h3 className="font-mono font-bold uppercase tracking-widest text-foreground">
+        Prompt Injection Risk (Synthetic Demo)
+      </h3>
+
+      <p className="text-xs text-muted-foreground">
+        Keyword-based demonstration of prompt-injection detection. This
+        repository does not contain a live LLM; the model is a synthetic
+        AI-security proof-of-concept.
+      </p>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="border border-border p-3">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Maximum Risk Score
+          </p>
+
+          <p className="font-mono text-2xl">{risk.maxRiskScore}</p>
+
+          <Badge
+            variant={
+              risk.overallLevel === "HIGH"
+                ? "destructive"
+                : risk.overallLevel === "MEDIUM"
+                  ? "warning"
+                  : "success"
+            }
+          >
+            {risk.overallLevel}
+          </Badge>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Prompt</TableHead>
+              <TableHead>Score</TableHead>
+              <TableHead>Level</TableHead>
+              <TableHead>Categories</TableHead>
+            </TableRow>
+          </TableHeader>
+
+          <TableBody>
+            {risk.examples.map((example, index) => (
+              <TableRow key={index}>
+                <TableCell className="font-mono text-xs">
+                  {example.prompt}
+                </TableCell>
+
+                <TableCell>{example.riskScore}</TableCell>
+
+                <TableCell>{example.level}</TableCell>
+
+                <TableCell className="font-mono text-xs">
+                  {example.categories.join(", ")}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </Card>
+  );
+}
 
 function PoisoningRiskCard({ risk }: { risk: AiPoisoningRisk }) {
   return (
@@ -613,6 +682,7 @@ export default function AiSecurity() {
           </p>
         </div>
         <BehavioralRiskCard risk={poc.behavioralRisk} />
+        <PromptInjectionRiskCard risk={poc.promptInjectionRisk} />
         <PoisoningRiskCard risk={poc.poisoningRisk} />
         <StarterKitCard kit={poc.starterKit} />
         <MemorisationCard mem={poc.memorisation} />

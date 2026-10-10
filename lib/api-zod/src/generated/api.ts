@@ -1270,6 +1270,18 @@ export const GetAiSecurityReportResponse = zod.object({
   "level": zod.string()
 })
 }),
+  "promptInjectionRisk": zod.object({
+  "script": zod.string(),
+  "author": zod.string(),
+  "maxRiskScore": zod.number().int(),
+  "overallLevel": zod.string(),
+  "examples": zod.array(zod.object({
+  "prompt": zod.string(),
+  "riskScore": zod.number().int(),
+  "level": zod.string(),
+  "categories": zod.array(zod.string())
+}))
+}),
   "poisoningRisk": zod.object({
   "script": zod.string(),
   "author": zod.string(),

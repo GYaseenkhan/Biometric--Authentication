@@ -33,6 +33,8 @@ export * from './aiPocStarterKitHardened';
 export * from './aiPocStarterKitVulnerable';
 export * from './aiPoisoningRisk';
 export * from './aiPoisoningRiskSummary';
+export * from './aiPromptInjectionExample';
+export * from './aiPromptInjectionRisk';
 export * from './aiSecurityReport';
 export * from './aiSystemEntry';
 export * from './aiSystemId';
