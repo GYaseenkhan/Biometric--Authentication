@@ -31,6 +31,8 @@ export * from './aiPocStarterKitDeletion';
 export * from './aiPocStarterKitExtractionTestsItem';
 export * from './aiPocStarterKitHardened';
 export * from './aiPocStarterKitVulnerable';
+export * from './aiPromptInjectionExample';
+export * from './aiPromptInjectionRisk';
 export * from './aiSecurityReport';
 export * from './aiSystemEntry';
 export * from './aiSystemId';
