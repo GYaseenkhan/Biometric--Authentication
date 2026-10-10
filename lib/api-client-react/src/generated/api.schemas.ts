@@ -878,11 +878,27 @@ export interface AiBehavioralRisk {
   suspiciousLogin: AiBehavioralRiskLogin;
 }
 
+export interface AiPromptInjectionExample {
+  prompt: string;
+  riskScore: number;
+  level: string;
+  categories: string[];
+}
+
+export interface AiPromptInjectionRisk {
+  script: string;
+  author: string;
+  maxRiskScore: number;
+  overallLevel: string;
+  examples: AiPromptInjectionExample[];
+}
+
 export interface AiPocReport {
   generator: string;
   starterKit: AiPocStarterKit;
   memorisation: AiPocMemorisation;
   behavioralRisk: AiBehavioralRisk;
+  promptInjectionRisk: AiPromptInjectionRisk;
 }
 
 export interface AiSecurityReport {

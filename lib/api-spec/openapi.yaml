@@ -3063,6 +3063,45 @@ components:
           $ref: "#/components/schemas/AiBehavioralRiskLogin"
         suspiciousLogin:
           $ref: "#/components/schemas/AiBehavioralRiskLogin"
+    AiPromptInjectionExample:
+      type: object
+      required:
+        - prompt
+        - riskScore
+        - level
+        - categories
+      properties:
+        prompt:
+          type: string
+        riskScore:
+          type: integer
+        level:
+          type: string
+        categories:
+          type: array
+          items:
+            type: string
+    AiPromptInjectionRisk:
+      type: object
+      required:
+        - script
+        - author
+        - maxRiskScore
+        - overallLevel
+        - examples
+      properties:
+        script:
+          type: string
+        author:
+          type: string
+        maxRiskScore:
+          type: integer
+        overallLevel:
+          type: string
+        examples:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiPromptInjectionExample"
     AiPocModelRun:
       type: object
       required: [prompt, output, canaryLeaked]
@@ -3075,7 +3114,14 @@ components:
           type: boolean
     AiPocReport:
       type: object
-      required: [generator, starterKit, memorisation, behavioralRisk]
+      required:
+        [
+          generator,
+          starterKit,
+          memorisation,
+          behavioralRisk,
+          promptInjectionRisk,
+        ]
       properties:
         generator:
           type: string
@@ -3085,6 +3131,8 @@ components:
           $ref: "#/components/schemas/AiPocMemorisation"
         behavioralRisk:
           $ref: "#/components/schemas/AiBehavioralRisk"
+        promptInjectionRisk:
+          $ref: "#/components/schemas/AiPromptInjectionRisk"
     AiPocStarterKit:
       description: Yaseen's model_starter.py, run unmodified
       type: object
