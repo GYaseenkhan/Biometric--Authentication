@@ -8,7 +8,7 @@ up into a prioritised risk register (Section 2), plus the security-testing appro
 
 - Assessed system: this repository's proof-of-concept — web app + Express API + PostgreSQL (the deep
   PoC), plus a mobile client (`artifacts/mobile`, Expo/React Native) covering the brief's Tier 1 §4
-  mobile requirement at a narrower scope: password plus a second step the person chooses: the phone's own biometric unlocking a device key (fingerprint, Face ID or Touch ID), or the same face check as the web app, run in a WebView (R-AUTH-1, R-MOBILE-5), unlike the web app's dual-factor departure described below.
+  mobile requirement at a narrower scope: password plus a second step the person chooses: the phone's own biometric unlocking a device key (fingerprint, Face ID or Touch ID), or the same face check as the web app, run in a WebView (R-AUTH-1, R-MOBILE-5). The face option is the same departure from the brief's device-native-only design as on the web, described below.
   The Android app has been tested on a real phone. The iOS app is built and tested in the iPhone Simulator in CI (`.github/workflows/ios.yml`), not yet on a real iPhone. Certificate pinning is implemented for Android release builds (`network_security_config.xml`, R-MOBILE-2) and, since 2026-10-07, for iOS (`NSPinnedDomains`, R-MOBILE-4).
 - MFA completion policy — face OR passkey, not both: `requireMfaEnrolled` was relaxed from requiring
   both factors to requiring either one, specifically so a passkey-only mobile account (which has no way
