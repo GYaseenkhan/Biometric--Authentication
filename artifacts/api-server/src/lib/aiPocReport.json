@@ -141,6 +141,12 @@
     "author": "Yaseen",
     "riskScore": 100,
     "level": "HIGH",
+    "summary": {
+      "duplicateRecords": 8,
+      "singleUserRatio": 0.7,
+      "canaryFrequency": 0.3,
+      "sourceDiversity": 0.2
+    },
     "categories": [
       "DUPLICATE_DOMINANCE",
       "USER_DOMINANCE",

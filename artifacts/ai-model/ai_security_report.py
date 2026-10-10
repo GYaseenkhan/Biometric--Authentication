@@ -184,13 +184,19 @@ def poisoning_risk():
         "author": "Yaseen",
         "riskScore": score,
         "level": dpr.classify(score),
+        "summary": {
+           "duplicateRecords": duplicate_records,
+           "singleUserRatio": single_user_ratio,
+           "canaryFrequency": canary_frequency,
+           "sourceDiversity": source_diversity,
+        },
         "categories": dpr.categorize(
             duplicate_records,
             single_user_ratio,
             canary_frequency,
             source_diversity,
-        ),
-    }
+       ),
+    } 
 
 def build():
     return {"generator": "artifacts/ai-model/ai_security_report.py", "starterKit": starter_kit(), "memorisation": memorisation_model(), "behavioralRisk": behavioral_risk(), "poisoningRisk": poisoning_risk()}
