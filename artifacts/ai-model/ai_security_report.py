@@ -22,6 +22,7 @@ import json
 import pathlib
 import sys
 import behavioral_risk_model as brm
+import data_poisoning_risk_model as dpr
 
 sys.dont_write_bytecode = True
 
@@ -165,8 +166,22 @@ def behavioral_risk():
         },
     }
 
+def poisoning_risk():
+    score = dpr.calculate_risk(
+        duplicate_records=8,
+        single_user_ratio=0.7,
+        canary_frequency=0.3,
+    )
+
+    return {
+        "script": "data_poisoning_risk_model.py",
+        "author": "Yaseen",
+        "riskScore": score,
+        "level": dpr.classify(score),
+    }
+
 def build():
-    return {"generator": "artifacts/ai-model/ai_security_report.py", "starterKit": starter_kit(), "memorisation": memorisation_model(), "behavioralRisk": behavioral_risk()}
+    return {"generator": "artifacts/ai-model/ai_security_report.py", "starterKit": starter_kit(), "memorisation": memorisation_model(), "behavioralRisk": behavioral_risk(), "poisoningRisk": poisoning_risk()}
 
 
 def main():

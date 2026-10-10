@@ -135,5 +135,11 @@
       "riskScore": 100,
       "level": "HIGH"
     }
+  },
+  "poisoningRisk": {
+    "script": "data_poisoning_risk_model.py",
+    "author": "Yaseen",
+    "riskScore": 100,
+    "level": "HIGH"
   }
 }
