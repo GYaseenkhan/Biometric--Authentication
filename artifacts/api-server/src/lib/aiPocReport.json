@@ -140,6 +140,12 @@
     "script": "data_poisoning_risk_model.py",
     "author": "Yaseen",
     "riskScore": 100,
-    "level": "HIGH"
+    "level": "HIGH",
+    "categories": [
+      "DUPLICATE_DOMINANCE",
+      "USER_DOMINANCE",
+      "CANARY_CONCENTRATION",
+      "LOW_SOURCE_DIVERSITY"
+    ]
   }
 }

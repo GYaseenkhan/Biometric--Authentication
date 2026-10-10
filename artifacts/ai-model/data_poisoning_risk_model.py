@@ -34,6 +34,29 @@ def classify(score: int):
     return "LOW"
 
 
+def categorize(
+    duplicate_records: int,
+    single_user_ratio: float,
+    canary_frequency: float,
+    source_diversity: float,
+):
+    categories = []
+
+    if duplicate_records >= 5:
+        categories.append("DUPLICATE_DOMINANCE")
+
+    if single_user_ratio > 0.5:
+        categories.append("USER_DOMINANCE")
+
+    if canary_frequency > 0.2:
+        categories.append("CANARY_CONCENTRATION")
+
+    if source_diversity < 0.4:
+        categories.append("LOW_SOURCE_DIVERSITY")
+
+    return categories or ["NONE"]
+
+
 def main():
     score = calculate_risk(
         duplicate_records=8,

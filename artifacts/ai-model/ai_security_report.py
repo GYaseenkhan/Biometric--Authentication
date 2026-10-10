@@ -167,11 +167,16 @@ def behavioral_risk():
     }
 
 def poisoning_risk():
+    duplicate_records = 8
+    single_user_ratio = 0.7
+    canary_frequency = 0.3
+    source_diversity = 0.2
+
     score = dpr.calculate_risk(
-        duplicate_records=8,
-        single_user_ratio=0.7,
-        canary_frequency=0.3,
-        source_diversity=0.2,
+        duplicate_records=duplicate_records,
+        single_user_ratio=single_user_ratio,
+        canary_frequency=canary_frequency,
+        source_diversity=source_diversity,
     )
 
     return {
@@ -179,6 +184,12 @@ def poisoning_risk():
         "author": "Yaseen",
         "riskScore": score,
         "level": dpr.classify(score),
+        "categories": dpr.categorize(
+            duplicate_records,
+            single_user_ratio,
+            canary_frequency,
+            source_diversity,
+        ),
     }
 
 def build():
