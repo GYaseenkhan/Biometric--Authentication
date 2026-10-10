@@ -85,45 +85,6 @@ up into a prioritised risk register (Section 2), plus the security-testing appro
 - "Status" below reflects the actual state of this codebase, not an aspirational target — known,
   accepted gaps are marked as such rather than presented as solved.
 
-### Prompt Injection Risk Detection
-
-The AI/ML security PoC includes a prompt-injection risk model
-(`artifacts/ai-model/prompt_injection_risk_model.py`).
-
-This is a keyword-based demonstration rather than a production prompt
-security system. The SecureAI application does not contain a live LLM,
-and the model is not connected to any real model input. Instead, it is a
-standalone AI-security proof-of-concept intended to demonstrate how
-prompt-injection style inputs may be identified and categorised.
-
-The model detects examples of:
-
-- Instruction-override attempts
-- System-prompt disclosure attempts
-- Data-exfiltration attempts
-- Policy-override attempts
-- Jailbreak-style prompts
-
-Detected prompts are assigned a risk score and classified as LOW,
-MEDIUM or HIGH risk.
-
-Reported categories include:
-
-- INSTRUCTION_OVERRIDE
-- DATA_EXFILTRATION
-- SYSTEM_PROMPT_DISCLOSURE
-- POLICY_OVERRIDE
-- JAILBREAK_ATTEMPT
-
-The model uses simple keyword and pattern matching and can therefore be
-evaded by sufficiently different wording. It is intended to demonstrate
-the security concept rather than provide comprehensive protection.
-
-This proof-of-concept maps most closely to OWASP Top 10 for LLM
-Applications LLM01: Prompt Injection. Because no LLM is deployed in the
-application itself, the model demonstrates the class of attack and its
-detection challenges rather than protecting a live production model.
-
 ## 0.1 Assets, threat actors, trust boundaries
 
 - **Key assets**: user accounts & credentials; user-uploaded media; payment & subscription data; audit
@@ -288,6 +249,45 @@ records the outcome.
 | Information disclosure                     | A new server-side capability, added 2026-09-11: `lib/contentPersonalizationModel.ts` decrypts a consented account's own uploaded text server-side — the first time anything in this app reads upload CONTENT rather than only metadata, a real departure from the "never decrypt unnecessarily" posture stated in `03_Data_Flow.md` | Gated behind its own, separate, explicit consent flag (`contentPersonalizationConsentGiven`) — not folded into `dataConsentGiven` or `trainingConsentGiven`. Never pooled or shared across accounts (contrast with `behaviorModel.ts`'s deliberately-shared corpus) — an account's own content is read only for that same account's own benefit, so there is no cross-account consent question the way there is for the behavior model. Nothing is persisted beyond the raw uploads that already exist — the profile is recomputed fresh from decrypted-in-memory content on every call, so withdrawn consent or a deleted upload is reflected immediately, with no separate "delete my AI profile" step needed because there is no stored profile to delete | Mitigated, verified live (R-ML-7, new) — a profile built from 2 seeded text uploads correctly surfaced their real keywords; withdrawing consent returned the profile to empty on the very next call with no stale data                                                                                                                                                                                                                                                                                                                                |
 | Tampering / Elevation of privilege         | Model theft/extraction via repeated queries against the new content-profile endpoint — the brief's two distinct controls (rate limiting, query monitoring) apply here too, arguably more so, since this is the one endpoint that reads decrypted content                                                                            | `GET /users/me/content-profile` gated by `requireParentConsent`, `requireMfaEnrolled`, `requestRateLimit("content-profile", 30, 5 * 60 * 1000)`, and every successful call — not just ones that trip the rate limit — writes a `CONTENT_PROFILE_QUERIED` audit event, same shape as `BEHAVIOR_MODEL_QUERIED`                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Mitigated, verified live (R-ML-7) — confirmed the audit event fires with an accurate keyword/document count on every call                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Elevation of privilege / Tampering         | Scope creep — the model quietly expanding to read photo/video/audio content without the additional consent those categories need                                                                                                                                                                                                    | Deliberately scoped to TEXT uploads only. Team 2's Acceptability Matrix (`09_Team2_Data_Source_Acceptability_Matrix.md` §3) requires photos/video to go through a distinct bystander-consent workflow this app doesn't have, and audio needs its own voice-cloning-specific consent — text has neither complication. `buildContentProfile()` filters on `fileType === "text"` at the query level, not as an afterthought                                                                                                                                                                                                                                                                                                                                     | Scoped by design, not yet exercised as an attack surface (there's no code path that would read a non-text upload's content regardless of input) — flagged to Team 2 for confirmation in `08_Requests_to_Team2.md`                                                                                                                                                                                                                                                                                                                                     |
+
+### Prompt Injection Risk Detection
+
+The AI/ML security PoC includes a prompt-injection risk model
+(`artifacts/ai-model/prompt_injection_risk_model.py`).
+
+This is a keyword-based demonstration rather than a production prompt
+security system. The SecureAI application does not contain a live LLM,
+and the model is not connected to any real model input. Instead, it is a
+standalone AI-security proof-of-concept intended to demonstrate how
+prompt-injection style inputs may be identified and categorised.
+
+The model detects examples of:
+
+- Instruction-override attempts
+- System-prompt disclosure attempts
+- Data-exfiltration attempts
+- Policy-override attempts
+- Jailbreak-style prompts
+
+Detected prompts are assigned a risk score and classified as LOW,
+MEDIUM or HIGH risk.
+
+Reported categories include:
+
+- INSTRUCTION_OVERRIDE
+- DATA_EXFILTRATION
+- SYSTEM_PROMPT_DISCLOSURE
+- POLICY_OVERRIDE
+- JAILBREAK_ATTEMPT
+
+The model uses simple keyword and pattern matching and can therefore be
+evaded by sufficiently different wording. It is intended to demonstrate
+the security concept rather than provide comprehensive protection.
+
+This proof-of-concept maps most closely to OWASP Top 10 for LLM
+Applications LLM01: Prompt Injection. Because no LLM is deployed in the
+application itself, the model demonstrates the class of attack and its
+detection challenges rather than protecting a live production model.
 
 ### Access control
 
