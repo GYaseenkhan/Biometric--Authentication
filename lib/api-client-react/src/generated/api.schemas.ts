@@ -878,11 +878,28 @@ export interface AiBehavioralRisk {
   suspiciousLogin: AiBehavioralRiskLogin;
 }
 
+export interface AiPoisoningRiskSummary {
+  duplicateRecords: number;
+  singleUserRatio: number;
+  canaryFrequency: number;
+  sourceDiversity: number;
+}
+
+export interface AiPoisoningRisk {
+  script: string;
+  author: string;
+  riskScore: number;
+  level: string;
+  summary: AiPoisoningRiskSummary;
+  categories: string[];
+}
+
 export interface AiPocReport {
   generator: string;
   starterKit: AiPocStarterKit;
   memorisation: AiPocMemorisation;
   behavioralRisk: AiBehavioralRisk;
+  poisoningRisk: AiPoisoningRisk;
 }
 
 export interface AiSecurityReport {

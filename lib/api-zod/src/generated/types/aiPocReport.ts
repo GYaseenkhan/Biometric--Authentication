@@ -8,10 +8,12 @@
 import type { AiBehavioralRisk } from './aiBehavioralRisk';
 import type { AiPocMemorisation } from './aiPocMemorisation';
 import type { AiPocStarterKit } from './aiPocStarterKit';
+import type { AiPoisoningRisk } from './aiPoisoningRisk';
 
 export interface AiPocReport {
   generator: string;
   starterKit: AiPocStarterKit;
   memorisation: AiPocMemorisation;
   behavioralRisk: AiBehavioralRisk;
+  poisoningRisk: AiPoisoningRisk;
 }
