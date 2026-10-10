@@ -171,6 +171,7 @@ def poisoning_risk():
         duplicate_records=8,
         single_user_ratio=0.7,
         canary_frequency=0.3,
+        source_diversity=0.2,
     )
 
     return {
