@@ -276,5 +276,21 @@
         ]
       }
     ]
+  },
+  "driftRisk": {
+    "script": "model_drift_risk_model.py",
+    "author": "Yaseen",
+    "riskScore": 50,
+    "level": "MEDIUM",
+    "summary": {
+      "featureDrift": 0.35,
+      "scoreDrift": 0.2,
+      "thresholdShift": 0.1,
+      "populationShift": 0.4
+    },
+    "categories": [
+      "FEATURE_DRIFT",
+      "POPULATION_SHIFT"
+    ]
   }
 }

@@ -23,6 +23,7 @@ import json
 import pathlib
 import sys
 import behavioral_risk_model as brm
+import model_drift_risk_model as mdr
 
 sys.dont_write_bytecode = True
 
@@ -190,7 +191,72 @@ def prompt_injection_risk():
             for prompt in prompt_examples
         ],
     }
-    
+def drift_risk():
+    feature_drift = 0.35
+    score_drift = 0.20
+    threshold_shift = 0.10
+    population_shift = 0.40
+
+    score = mdr.calculate_risk(
+        feature_drift=feature_drift,
+        score_drift=score_drift,
+        threshold_shift=threshold_shift,
+        population_shift=population_shift,
+    )
+
+    categories = mdr.categorize(
+        feature_drift=feature_drift,
+        score_drift=score_drift,
+        threshold_shift=threshold_shift,
+        population_shift=population_shift,
+    )
+
+    return {
+        "script": "model_drift_risk_model.py",
+        "author": "Yaseen",
+        "riskScore": score,
+        "level": mdr.classify(score, categories),
+        "summary": {
+            "featureDrift": feature_drift,
+            "scoreDrift": score_drift,
+            "thresholdShift": threshold_shift,
+            "populationShift": population_shift,
+        },
+        "categories": categories,
+    }  
+def drift_risk():
+    feature_drift = 0.35
+    score_drift = 0.20
+    threshold_shift = 0.10
+    population_shift = 0.40
+
+    score = mdr.calculate_risk(
+        feature_drift=feature_drift,
+        score_drift=score_drift,
+        threshold_shift=threshold_shift,
+        population_shift=population_shift,
+    )
+
+    categories = mdr.categorize(
+        feature_drift=feature_drift,
+        score_drift=score_drift,
+        threshold_shift=threshold_shift,
+        population_shift=population_shift,
+    )
+
+    return {
+        "script": "model_drift_risk_model.py",
+        "author": "Yaseen",
+        "riskScore": score,
+        "level": mdr.classify(score, categories),
+        "summary": {
+            "featureDrift": feature_drift,
+            "scoreDrift": score_drift,
+            "thresholdShift": threshold_shift,
+            "populationShift": population_shift,
+        },
+        "categories": categories,
+    }  
 def build():
     return {
         "generator": "artifacts/ai-model/ai_security_report.py",
@@ -198,6 +264,7 @@ def build():
         "memorisation": memorisation_model(),
         "behavioralRisk": behavioral_risk(),
         "promptInjectionRisk": prompt_injection_risk(),
+        "driftRisk": drift_risk(),
     }
 
 
