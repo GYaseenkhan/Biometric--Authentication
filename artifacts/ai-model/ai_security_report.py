@@ -138,6 +138,7 @@ def memorisation_model():
         "console": console_of(mlm.main),
     }
 
+
 def behavioral_risk():
     normal_score = brm.calculate_risk(
         failed_attempts=0,
@@ -166,6 +167,8 @@ def behavioral_risk():
             "level": brm.classify(suspicious_score),
         },
     }
+
+
 def prompt_injection_risk():
     prompt_examples = pir.PROMPT_EXAMPLES
 
@@ -190,7 +193,9 @@ def prompt_injection_risk():
             }
             for prompt in prompt_examples
         ],
-    } 
+    }
+
+
 def drift_risk():
     records = ms.generate_corpus()
 
@@ -273,7 +278,9 @@ def drift_risk():
             "populationShift": population_shift,
         },
         "categories": categories,
-    }  
+    }
+
+
 def build():
     return {
         "generator": "artifacts/ai-model/ai_security_report.py",
