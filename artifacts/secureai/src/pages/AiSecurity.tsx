@@ -483,7 +483,80 @@ function PromptInjectionRiskCard({ risk }: { risk: AiPromptInjectionRisk }) {
     </Card>
   );
 }
+function DriftRiskCard({ risk }: { risk: any }) {
+  return (
+    <Card className="space-y-5">
+      <h3 className="font-mono font-bold uppercase tracking-widest text-foreground">
+        Model Drift Risk (Synthetic Demo)
+      </h3>
 
+      <p className="text-xs text-muted-foreground">
+        Synthetic demonstration of model drift monitoring. The model measures
+        feature drift, score drift, threshold instability and population shift.
+      </p>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="border border-border p-3">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Risk Score
+          </p>
+
+          <p className="font-mono text-2xl">{risk.riskScore}</p>
+
+          <Badge
+            variant={
+              risk.level === "HIGH"
+                ? "destructive"
+                : risk.level === "MEDIUM"
+                  ? "warning"
+                  : "success"
+            }
+          >
+            {risk.level}
+          </Badge>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="border border-border p-3">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Feature Drift
+          </p>
+          <p>{risk.summary.featureDrift}</p>
+        </div>
+
+        <div className="border border-border p-3">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Score Drift
+          </p>
+          <p>{risk.summary.scoreDrift}</p>
+        </div>
+
+        <div className="border border-border p-3">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Threshold Shift
+          </p>
+          <p>{risk.summary.thresholdShift}</p>
+        </div>
+
+        <div className="border border-border p-3">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Population Shift
+          </p>
+          <p>{risk.summary.populationShift}</p>
+        </div>
+      </div>
+
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+          Categories
+        </p>
+
+        <p className="font-mono text-xs">{risk.categories.join(", ")}</p>
+      </div>
+    </Card>
+  );
+}
 export default function AiSecurity() {
   const { data, isLoading, isFetching, error, refetch } =
     useGetAiSecurityReport({
@@ -623,6 +696,7 @@ export default function AiSecurity() {
           </p>
         </div>
         <BehavioralRiskCard risk={poc.behavioralRisk} />
+        <DriftRiskCard risk={poc.driftRisk} />
         <PromptInjectionRiskCard risk={poc.promptInjectionRisk} />
         <StarterKitCard kit={poc.starterKit} />
         <MemorisationCard mem={poc.memorisation} />
