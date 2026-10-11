@@ -286,7 +286,7 @@
       "duplicateRecords": 7,
       "singleUserRatio": 0.17,
       "canaryFrequency": 0.44,
-      "sourceDiversity": 0.06
+      "sourceDiversity": 0.0
     },
     "categories": [
       "DUPLICATE_DOMINANCE",

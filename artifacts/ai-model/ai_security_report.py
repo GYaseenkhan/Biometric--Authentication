@@ -166,6 +166,8 @@ def behavioral_risk():
             "level": brm.classify(suspicious_score),
         },
     }
+    
+
 def prompt_injection_risk():
     prompt_examples = pir.PROMPT_EXAMPLES
 
@@ -191,12 +193,17 @@ def prompt_injection_risk():
             for prompt in prompt_examples
         ],
     }
+    
+    
 def corpus_metrics(records):
     duplicate_records = len(records) - len({r["text_hash"] for r in records})
 
     user_counts = {}
+
     for r in records:
-        user_counts[r["user_id"]] = user_counts.get(r["user_id"], 0) + 1
+        user_counts[r["user_id"]] = (
+            user_counts.get(r["user_id"], 0) + 1
+        )
 
     single_user_ratio = (
         max(user_counts.values()) / len(records)
@@ -210,8 +217,15 @@ def corpus_metrics(records):
         else 0
     )
 
+    source_counts = {}
+
+    for r in records:
+        source_counts[r["source_id"]] = (
+            source_counts.get(r["source_id"], 0) + 1
+        )
+
     source_diversity = (
-        len({r["source_id"] for r in records}) / len(records)
+        1 - max(source_counts.values()) / len(records)
         if records
         else 0
     )
@@ -221,14 +235,14 @@ def corpus_metrics(records):
         "single_user_ratio": round(single_user_ratio, 2),
         "canary_frequency": round(canary_frequency, 2),
         "source_diversity": round(source_diversity, 2),
-    }   
+    }
+       
 def poisoning_risk():
     records = ms.generate_corpus()
 
     with contextlib.redirect_stdout(io.StringIO()):
         allowed, _ = ms.consent_gate(records)
 
-    raw = corpus_metrics(records)
     filtered = corpus_metrics(allowed)
 
     score = dpr.calculate_risk(
@@ -245,10 +259,7 @@ def poisoning_risk():
         filtered["source_diversity"],
     )
 
-    level = dpr.classify(score)
-
-    if categories != ["NONE"] and level == "LOW":
-        level = "MEDIUM"
+    level = dpr.classify(score, categories)
 
     return {
         "script": "data_poisoning_risk_model.py",
@@ -262,7 +273,7 @@ def poisoning_risk():
             "sourceDiversity": filtered["source_diversity"],
         },
         "categories": categories,
-    } 
+    }
 
 def build():
     return {
@@ -273,7 +284,6 @@ def build():
         "promptInjectionRisk": prompt_injection_risk(),
         "poisoningRisk": poisoning_risk(),
     }
-
 
 def main():
     report = build()

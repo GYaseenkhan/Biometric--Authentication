@@ -26,11 +26,16 @@ def calculate_risk(
     return min(score, 100)
 
 
-def classify(score: int):
+def classify(score: int, categories=None):
     if score >= 80:
         return "HIGH"
+
     if score >= 40:
         return "MEDIUM"
+
+    if categories and categories != ["NONE"]:
+        return "MEDIUM"
+
     return "LOW"
 
 
@@ -67,7 +72,7 @@ SCENARIOS = [
     },
     {
         "name": "Moderate Poisoning Risk",
-        "duplicate_records": 4,
+        "duplicate_records": 5,
         "single_user_ratio": 0.4,
         "canary_frequency": 0.1,
         "source_diversity": 0.5,
@@ -91,9 +96,16 @@ def main():
             source_diversity=scenario["source_diversity"],
         )
 
+        categories = categorize(
+            duplicate_records=scenario["duplicate_records"],
+            single_user_ratio=scenario["single_user_ratio"],
+            canary_frequency=scenario["canary_frequency"],
+            source_diversity=scenario["source_diversity"],
+        )
+
         print(
             f'{scenario["name"]} -> '
-            f'{score} ({classify(score)})'
+            f'{score} ({classify(score, categories)})'
         )
 
 
