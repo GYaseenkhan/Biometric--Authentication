@@ -893,12 +893,29 @@ export interface AiPromptInjectionRisk {
   examples: AiPromptInjectionExample[];
 }
 
+export interface AiModelDriftRiskSummary {
+  featureDrift: number;
+  scoreDrift: number;
+  thresholdShift: number;
+  populationShift: number;
+}
+
+export interface AiModelDriftRisk {
+  script: string;
+  author: string;
+  riskScore: number;
+  level: string;
+  summary: AiModelDriftRiskSummary;
+  categories: string[];
+}
+
 export interface AiPocReport {
   generator: string;
   starterKit: AiPocStarterKit;
   memorisation: AiPocMemorisation;
   behavioralRisk: AiBehavioralRisk;
   promptInjectionRisk: AiPromptInjectionRisk;
+  driftRisk: AiModelDriftRisk;
 }
 
 export interface AiSecurityReport {

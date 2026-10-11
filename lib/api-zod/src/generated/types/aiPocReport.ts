@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AiBehavioralRisk } from './aiBehavioralRisk';
+import type { AiModelDriftRisk } from './aiModelDriftRisk';
 import type { AiPocMemorisation } from './aiPocMemorisation';
 import type { AiPocStarterKit } from './aiPocStarterKit';
 import type { AiPromptInjectionRisk } from './aiPromptInjectionRisk';
@@ -16,4 +17,5 @@ export interface AiPocReport {
   memorisation: AiPocMemorisation;
   behavioralRisk: AiBehavioralRisk;
   promptInjectionRisk: AiPromptInjectionRisk;
+  driftRisk: AiModelDriftRisk;
 }
