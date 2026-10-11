@@ -23,6 +23,7 @@ import json
 import pathlib
 import sys
 import behavioral_risk_model as brm
+import data_poisoning_risk_model as dpr
 
 sys.dont_write_bytecode = True
 
@@ -165,6 +166,8 @@ def behavioral_risk():
             "level": brm.classify(suspicious_score),
         },
     }
+
+
 def prompt_injection_risk():
     prompt_examples = pir.PROMPT_EXAMPLES
 
@@ -190,7 +193,90 @@ def prompt_injection_risk():
             for prompt in prompt_examples
         ],
     }
-    
+
+
+def corpus_metrics(records):
+    duplicate_records = len(records) - len({r["text_hash"] for r in records})
+
+    user_counts = {}
+
+    for r in records:
+        user_counts[r["user_id"]] = (
+            user_counts.get(r["user_id"], 0) + 1
+        )
+
+    single_user_ratio = (
+        max(user_counts.values()) / len(records)
+        if records
+        else 0
+    )
+
+    canary_frequency = (
+        sum(ms.CANARY in r["text"] for r in records) / len(records)
+        if records
+        else 0
+    )
+
+    source_counts = {}
+
+    for r in records:
+        source_counts[r["source_id"]] = (
+            source_counts.get(r["source_id"], 0) + 1
+        )
+
+    source_diversity = (
+        1 - max(source_counts.values()) / len(records)
+        if records
+        else 0
+    )
+
+    return {
+        "duplicate_records": duplicate_records,
+        "single_user_ratio": round(single_user_ratio, 2),
+        "canary_frequency": round(canary_frequency, 2),
+        "source_diversity": round(source_diversity, 2),
+    }
+
+
+def poisoning_risk():
+    records = ms.generate_corpus()
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        allowed, _ = ms.consent_gate(records)
+
+    filtered = corpus_metrics(allowed)
+
+    score = dpr.calculate_risk(
+        duplicate_records=filtered["duplicate_records"],
+        single_user_ratio=filtered["single_user_ratio"],
+        canary_frequency=filtered["canary_frequency"],
+        source_diversity=filtered["source_diversity"],
+    )
+
+    categories = dpr.categorize(
+        filtered["duplicate_records"],
+        filtered["single_user_ratio"],
+        filtered["canary_frequency"],
+        filtered["source_diversity"],
+    )
+
+    level = dpr.classify(score, categories)
+
+    return {
+        "script": "data_poisoning_risk_model.py",
+        "author": "Yaseen",
+        "riskScore": score,
+        "level": level,
+        "summary": {
+            "duplicateRecords": filtered["duplicate_records"],
+            "singleUserRatio": filtered["single_user_ratio"],
+            "canaryFrequency": filtered["canary_frequency"],
+            "sourceDiversity": filtered["source_diversity"],
+        },
+        "categories": categories,
+    }
+
+
 def build():
     return {
         "generator": "artifacts/ai-model/ai_security_report.py",
@@ -198,8 +284,8 @@ def build():
         "memorisation": memorisation_model(),
         "behavioralRisk": behavioral_risk(),
         "promptInjectionRisk": prompt_injection_risk(),
+        "poisoningRisk": poisoning_risk(),
     }
-
 
 def main():
     report = build()
