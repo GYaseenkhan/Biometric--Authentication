@@ -190,45 +190,62 @@ def prompt_injection_risk():
             }
             for prompt in prompt_examples
         ],
-    }
+    } 
 def drift_risk():
-    feature_drift = 0.35
-    score_drift = 0.20
-    threshold_shift = 0.10
-    population_shift = 0.40
+    records = ms.generate_corpus()
 
-    score = mdr.calculate_risk(
-        feature_drift=feature_drift,
-        score_drift=score_drift,
-        threshold_shift=threshold_shift,
-        population_shift=population_shift,
+    with contextlib.redirect_stdout(io.StringIO()):
+        allowed, _ = ms.consent_gate(records)
+
+    feature_drift = abs(
+        len(records) - len(allowed)
+    ) / len(records)
+
+    raw_duplicates = (
+        len(records)
+        - len({r["text_hash"] for r in records})
     )
 
-    categories = mdr.categorize(
-        feature_drift=feature_drift,
-        score_drift=score_drift,
-        threshold_shift=threshold_shift,
-        population_shift=population_shift,
+    allowed_duplicates = (
+        len(allowed)
+        - len({r["text_hash"] for r in allowed})
     )
 
-    return {
-        "script": "model_drift_risk_model.py",
-        "author": "Yaseen",
-        "riskScore": score,
-        "level": mdr.classify(score, categories),
-        "summary": {
-            "featureDrift": feature_drift,
-            "scoreDrift": score_drift,
-            "thresholdShift": threshold_shift,
-            "populationShift": population_shift,
-        },
-        "categories": categories,
-    }  
-def drift_risk():
-    feature_drift = 0.35
-    score_drift = 0.20
-    threshold_shift = 0.10
-    population_shift = 0.40
+    score_drift = abs(
+        raw_duplicates / len(records)
+        - allowed_duplicates / len(allowed)
+    )
+
+    raw_users = {}
+    for r in records:
+        raw_users[r["user_id"]] = (
+            raw_users.get(r["user_id"], 0) + 1
+        )
+
+    allowed_users = {}
+    for r in allowed:
+        allowed_users[r["user_id"]] = (
+            allowed_users.get(r["user_id"], 0) + 1
+        )
+
+    population_shift = abs(
+        max(raw_users.values()) / len(records)
+        - max(allowed_users.values()) / len(allowed)
+    )
+
+    raw_canary = (
+        sum(ms.CANARY in r["text"] for r in records)
+        / len(records)
+    )
+
+    allowed_canary = (
+        sum(ms.CANARY in r["text"] for r in allowed)
+        / len(allowed)
+    )
+
+    threshold_shift = abs(
+        raw_canary - allowed_canary
+    )
 
     score = mdr.calculate_risk(
         feature_drift=feature_drift,

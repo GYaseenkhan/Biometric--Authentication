@@ -280,17 +280,16 @@
   "driftRisk": {
     "script": "model_drift_risk_model.py",
     "author": "Yaseen",
-    "riskScore": 50,
-    "level": "MEDIUM",
+    "riskScore": 0,
+    "level": "LOW",
     "summary": {
-      "featureDrift": 0.35,
-      "scoreDrift": 0.2,
-      "thresholdShift": 0.1,
-      "populationShift": 0.4
+      "featureDrift": 0.21739130434782608,
+      "scoreDrift": 0.04589371980676327,
+      "thresholdShift": 0.033816425120772986,
+      "populationShift": 0.09420289855072464
     },
     "categories": [
-      "FEATURE_DRIFT",
-      "POPULATION_SHIFT"
+      "NONE"
     ]
   }
 }
