@@ -25,6 +25,7 @@ import { requireParentConsent } from "../middlewares/requireParentConsent";
 import { ABSOLUTE_SESSION_MAX_MS } from "../lib/sessionPolicy";
 import { getClientIp } from "../lib/clientIp";
 import { enforceSessionLimit } from "../lib/sessionLimit";
+import { checkNewPassword } from "../lib/breachedPasswords";
 import { activeHoldsFor, keepPasskeys } from "../lib/legalHolds";
 
 // verifyRegistrationResponse/verifyAuthenticationResponse below do the real cryptographic verification of the WebAuthn response — Zod here only types the surrounding fields (bounded deviceName, primitive checks) before that call, so it doesn't duplicate or risk being stricter than the crypto check.
@@ -235,7 +236,7 @@ router.post(
       .where(eq(usersTable.id, userId));
     await logEvent({
       eventType: "PASSKEY_ENROLLED",
-      details: `Passkey enrolled${body.deviceName ? ` (${body.deviceName})` : ""} for ${user?.email ?? userId}`,
+      details: `Passkey enrolled${body.deviceName ? ` (${body.deviceName})` : ""} for user ${userId}`,
       userId,
       userEmail: user?.email,
       ipAddress: getClientIp(req),
@@ -298,7 +299,7 @@ router.delete("/auth/passkey/:id", async (req, res): Promise<void> => {
 
   await logEvent({
     eventType: "PASSKEY_REMOVED",
-    details: `Passkey removed${key.deviceName ? ` (${key.deviceName})` : ""} for ${user?.email ?? userId}`,
+    details: `Passkey removed${key.deviceName ? ` (${key.deviceName})` : ""} for user ${userId}`,
     userId,
     userEmail: user?.email,
     ipAddress: getClientIp(req),
@@ -461,7 +462,7 @@ router.post("/auth/passkey/login-verify", async (req, res): Promise<void> => {
 
   await logEvent({
     eventType: "LOGIN_PASSKEY_SUCCESS",
-    details: `Passkey MFA passed for ${user.email} — device-held key signed the server challenge`,
+    details: `Passkey MFA passed for user ${user.id} — device-held key signed the server challenge`,
     userId: user.id,
     userEmail: user.email,
     ipAddress: ip,
@@ -546,6 +547,21 @@ router.post(
       return;
     }
     const body = parsedBody.data;
+
+    // The challenge is already used up, so a refused password means one more passkey prompt.
+    const [owner] = await db
+      .select({ email: usersTable.email })
+      .from(usersTable)
+      .where(eq(usersTable.id, record.userId));
+    const passwordCheck = await checkNewPassword(body.newPassword, {
+      email: owner?.email,
+    });
+    if (!passwordCheck.ok) {
+      res
+        .status(400)
+        .json({ error: passwordCheck.message, code: "PASSWORD_NOT_ALLOWED" });
+      return;
+    }
 
     const [key] = await db
       .select()
@@ -638,7 +654,7 @@ router.post(
 
     await logEvent({
       eventType: "PASSWORD_RESET_COMPLETED",
-      details: `Password reset completed for ${user.email} (passkey-verified)`,
+      details: `Password reset completed for user ${user.id} (passkey-verified)`,
       userId: user.id,
       userEmail: user.email,
       ipAddress: ip,
