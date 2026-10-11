@@ -243,6 +243,38 @@ records the outcome.
 | Tampering / Elevation of privilege         | Model theft/extraction via repeated queries against the new content-profile endpoint — the brief's two distinct controls (rate limiting, query monitoring) apply here too, arguably more so, since this is the one endpoint that reads decrypted content                                                                            | `GET /users/me/content-profile` gated by `requireParentConsent`, `requireMfaEnrolled`, `requestRateLimit("content-profile", 30, 5 * 60 * 1000)`, and every successful call — not just ones that trip the rate limit — writes a `CONTENT_PROFILE_QUERIED` audit event, same shape as `BEHAVIOR_MODEL_QUERIED`                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Mitigated, verified live (R-ML-7) — confirmed the audit event fires with an accurate keyword/document count on every call                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Elevation of privilege / Tampering         | Scope creep — the model quietly expanding to read photo/video/audio content without the additional consent those categories need                                                                                                                                                                                                    | Deliberately scoped to TEXT uploads only. Team 2's Acceptability Matrix (`09_Team2_Data_Source_Acceptability_Matrix.md` §3) requires photos/video to go through a distinct bystander-consent workflow this app doesn't have, and audio needs its own voice-cloning-specific consent — text has neither complication. `buildContentProfile()` filters on `fileType === "text"` at the query level, not as an afterthought                                                                                                                                                                                                                                                                                                                                     | Scoped by design, not yet exercised as an attack surface (there's no code path that would read a non-text upload's content regardless of input) — flagged to Team 2 for confirmation in `08_Requests_to_Team2.md`                                                                                                                                                                                                                                                                                                                                     |
 
+### Model Drift Risk Score
+
+Synthetic demonstration of model-drift monitoring.
+
+The proof-of-concept evaluates four indicators:
+
+- Feature drift
+- Score drift
+- Threshold instability
+- Population shift
+
+Each indicator contributes to a cumulative risk score and may also generate
+one or more categories:
+
+- FEATURE_DRIFT
+- SCORE_DRIFT
+- THRESHOLD_INSTABILITY
+- POPULATION_SHIFT
+
+Risk levels:
+
+- LOW: normal operating behaviour
+- MEDIUM: one or more drift indicators identified
+- HIGH: multiple significant drift indicators present
+
+The implementation is provided by
+`artifacts/ai-model/model_drift_risk_model.py` and is displayed on the
+AI Security page alongside the team's other AI/ML security proof-of-concepts.
+
+The model uses synthetic data only and exists as an educational
+AI-security demonstration rather than a production drift-detection system.
+
 ### Prompt Injection Risk Detection
 
 The AI/ML security PoC includes a prompt-injection risk model
