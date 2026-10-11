@@ -166,7 +166,7 @@ def behavioral_risk():
             "level": brm.classify(suspicious_score),
         },
     }
-    
+
 
 def prompt_injection_risk():
     prompt_examples = pir.PROMPT_EXAMPLES
@@ -193,8 +193,8 @@ def prompt_injection_risk():
             for prompt in prompt_examples
         ],
     }
-    
-    
+
+
 def corpus_metrics(records):
     duplicate_records = len(records) - len({r["text_hash"] for r in records})
 
@@ -236,7 +236,8 @@ def corpus_metrics(records):
         "canary_frequency": round(canary_frequency, 2),
         "source_diversity": round(source_diversity, 2),
     }
-       
+
+
 def poisoning_risk():
     records = ms.generate_corpus()
 
@@ -274,6 +275,7 @@ def poisoning_risk():
         },
         "categories": categories,
     }
+
 
 def build():
     return {
