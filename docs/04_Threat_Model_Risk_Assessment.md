@@ -258,35 +258,30 @@ records the outcome.
 
 ### Model Drift Risk Score
 
-Synthetic demonstration of model-drift monitoring.
+Synthetic demonstration of model-drift monitoring: `artifacts/ai-model/model_drift_risk_model.py`, run by
+`ai_security_report.py` and shown on the AI Security page with the team's other AI/ML proof-of-concepts.
+Drift means change over time, so it compares two snapshots of the training data, both after the consent
+gate (so the gate filtering records is not counted as drift):
 
-The proof-of-concept evaluates four indicators:
+- **Then:** the synthetic corpus from `model_starter.py`, 18 records once consent and the per-user cap apply.
+- **Now:** the same corpus after five new users join and write about different topics (payments and
+  uploads), 28 records.
 
-- Feature drift
-- Score drift
-- Threshold instability
-- Population shift
+Each indicator runs from 0 to 1 and is rounded to 2 decimals:
 
-Each indicator contributes to a cumulative risk score and may also generate
-one or more categories:
+| Indicator        | Measured as                                                                                                                          | Flagged above                 | Value |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- | ----- |
+| Feature drift    | Total variation distance between the two snapshots' word frequencies (half the sum of the absolute differences in each word's share) | 0.3 (`FEATURE_DRIFT`)         | 0.31  |
+| Score drift      | Change in prediction coverage on the 8 ordinary prompts (#31) between the model trained on "then" and the model retrained on "now"   | 0.3 (`SCORE_DRIFT`)           | 0     |
+| Threshold shift  | Change in the share of word contexts whose most likely next word clears the model's emission threshold (`MIN_COUNT`, 3)              | 0.2 (`THRESHOLD_INSTABILITY`) | 0.05  |
+| Population shift | Change in the largest account's share of the corpus (`single_user_ratio` from `corpus_metrics()`)                                    | 0.3 (`POPULATION_SHIFT`)      | 0.06  |
 
-- FEATURE_DRIFT
-- SCORE_DRIFT
-- THRESHOLD_INSTABILITY
-- POPULATION_SHIFT
+Each flagged indicator adds 25 to the score (0 to 100). The level is HIGH at 80 or more, MEDIUM at 40 or
+more or when any indicator is flagged, and LOW otherwise. The current 25 (MEDIUM) therefore means one
+indicator crossed its line: the new users' topics moved the word frequencies (0.31), while the model's
+answers to the same prompts did not change (score drift 0).
 
-Risk levels:
-
-- LOW: normal operating behaviour
-- MEDIUM: one or more drift indicators identified
-- HIGH: multiple significant drift indicators present
-
-The implementation is provided by
-`artifacts/ai-model/model_drift_risk_model.py` and is displayed on the
-AI Security page alongside the team's other AI/ML security proof-of-concepts.
-
-The model uses synthetic data only and exists as an educational
-AI-security demonstration rather than a production drift-detection system.
+The data is synthetic. This is an educational AI-security demonstration, not a production drift detector.
 
 ### Prompt Injection Risk Detection
 

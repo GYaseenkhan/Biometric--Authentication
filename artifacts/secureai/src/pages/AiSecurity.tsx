@@ -7,6 +7,7 @@ import {
   type AiBehavioralRisk,
   type AiPromptInjectionRisk,
   type AiPoisoningRisk,
+  type AiModelDriftRisk,
 } from "@workspace/api-client-react";
 import {
   Card,
@@ -543,7 +544,7 @@ function PoisoningRiskCard({ risk }: { risk: AiPoisoningRisk }) {
   );
 }
 
-function DriftRiskCard({ risk }: { risk: any }) {
+function DriftRiskCard({ risk }: { risk: AiModelDriftRisk }) {
   return (
     <Card className="space-y-5">
       <h3 className="font-mono font-bold uppercase tracking-widest text-foreground">
@@ -551,8 +552,12 @@ function DriftRiskCard({ risk }: { risk: any }) {
       </h3>
 
       <p className="text-xs text-muted-foreground">
-        Synthetic demonstration of model drift monitoring. The model measures
-        feature drift, score drift, threshold instability and population shift.
+        Synthetic demonstration of model drift monitoring. It compares the
+        corpus the model was trained on with the corpus after five new users
+        join with different topics, both after the consent gate: how far the
+        word frequencies moved, how the answers to the same ordinary prompts
+        changed after retraining, how the model's emission threshold behaves,
+        and how the largest account's share changed.
       </p>
 
       <div className="grid gap-3 md:grid-cols-2">
