@@ -9,6 +9,7 @@ import type { AiBehavioralRisk } from './aiBehavioralRisk';
 import type { AiModelDriftRisk } from './aiModelDriftRisk';
 import type { AiPocMemorisation } from './aiPocMemorisation';
 import type { AiPocStarterKit } from './aiPocStarterKit';
+import type { AiPoisoningRisk } from './aiPoisoningRisk';
 import type { AiPromptInjectionRisk } from './aiPromptInjectionRisk';
 
 export interface AiPocReport {
@@ -17,5 +18,6 @@ export interface AiPocReport {
   memorisation: AiPocMemorisation;
   behavioralRisk: AiBehavioralRisk;
   promptInjectionRisk: AiPromptInjectionRisk;
+  poisoningRisk: AiPoisoningRisk;
   driftRisk: AiModelDriftRisk;
 }
